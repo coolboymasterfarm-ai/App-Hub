@@ -127,13 +127,14 @@ if errorlevel 1 (
   echo         [!] Ollama is not installed - get it from https://ollama.com if you want local AI
   goto :ollama_done
 )
-tasklist /fi "imagename eq ollama.exe" | find /i "ollama.exe" >nul || start "" /min ollama serve
-timeout /t 3 /nobreak >nul
-REM App Hub sets CF_SKIP_MODEL: the user picks a model that fits their PC in its AI Models tab.
+REM App Hub sets CF_SKIP_MODEL: it runs Ollama itself, and the user picks a model that fits their PC
+REM in its AI Models tab. (It also runs this script without a console, where timeout would fail.)
 if defined CF_SKIP_MODEL (
   echo         pick a chat model in App Hub ^> AI Models
   goto :ollama_done
 )
+tasklist /fi "imagename eq ollama.exe" | find /i "ollama.exe" >nul || start "" /min ollama serve
+timeout /t 3 /nobreak >nul
 ollama list 2>nul | findstr /r /i "qwen llama gemma mistral phi" >nul
 if errorlevel 1 (
   echo         downloading a chat model: qwen3:8b ^(~5 GB, one time^)

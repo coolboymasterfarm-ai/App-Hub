@@ -21,6 +21,10 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
    ClipForge ships inside and is copied to %LOCALAPPDATA%\App Hub\ClipForge on first run; setup runs its Install.bat.
 7. AI Models tab: detects the PC's hardware, recommends models for the hub's apps (src/models.js), downloads them
    (Ollama for chat models, faster-whisper for speech), switches ClipForge to them, deletes them.
+8. Folder apps: Add app accepts a folder with an index.html (Choose folder… or drag and drop); it is copied to
+   userData/apps/ and the copy is deleted when the app is removed.
+9. One-click installs: Home lists apps missing from the PC (INSTALLERS in main.js: Ollama, ClipForge) with Install and
+   Install all. Installers run hidden (no CMD window) and stream their output into the hub.
 
 ## NOT built yet (do not build, even if it seems small)
 API key manager, accounts/sign-in, app store/catalog, themes, sync, auto-update, code signing, running native .exe programs

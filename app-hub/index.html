@@ -61,6 +61,19 @@
     dialog label { display: block; font-size: 13px; color: #aaa; margin: 12px 0 4px; }
     dialog input { width: 100%; padding: 8px 10px; background: #111; color: #fff; border: 1px solid #444; border-radius: 6px; font-size: 14px; }
     dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .addr { display: flex; gap: 8px; }
+    .addr input { flex: 1; }
+    .drop { margin-top: 12px; border: 2px dashed #444; border-radius: 10px; padding: 18px; text-align: center; color: #8b92a1; font-size: 13px; }
+    .drop.over { border-color: #0066cc; color: #fff; background: #13233a; }
+    .installs { margin-bottom: 32px; }
+    .installs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .installs-head h2 { margin: 0; }
+    .inst { background: #1e1e1e; border: 1px solid #333; border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; }
+    .inst-row { display: flex; align-items: center; gap: 16px; }
+    .inst-row > div { flex: 1; }
+    .inst .last { font-family: Consolas, monospace; font-size: 12px; color: #8b92a1; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .inst details { margin-top: 8px; font-size: 12px; color: #8b92a1; }
+    .inst pre { max-height: 220px; overflow: auto; background: #111; padding: 10px; border-radius: 6px; margin-top: 6px; font-size: 11px; white-space: pre-wrap; }
     .error { color: #ff6b6b; font-size: 13px; margin-top: 10px; min-height: 1em; }
     .hw { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
     .hw div { background: #1e1e1e; border: 1px solid #333; border-radius: 10px; padding: 12px 14px; }
@@ -89,10 +102,14 @@
 
   <main>
     <div id="home-view" class="view">
-      <div class="banner" id="setup-banner" hidden>
-        <p><b>ClipForge needs a one-time setup.</b><br><span class="muted">Downloads Python, ffmpeg and its tools (about 5–15 minutes). A window opens so you can watch it; press a key in it when it says Done.</span></p>
-        <button class="btn" id="setup-btn">Run setup</button>
-      </div>
+      <section class="installs" id="installs" hidden>
+        <div class="installs-head">
+          <h2>Install apps</h2>
+          <button class="btn" id="install-all">Install all</button>
+        </div>
+        <p class="muted" style="margin-bottom:12px">These aren't on this PC yet. Click Install (or Install all to do them one by one). Everything runs inside App Hub.</p>
+        <div id="install-list"></div>
+      </section>
       <h2>Your Apps</h2>
       <div class="apps-grid" id="apps-grid"></div>
     </div>
@@ -127,7 +144,11 @@
       <label for="add-name">Name</label>
       <input id="add-name" maxlength="40" placeholder="My notes">
       <label for="add-url">Address</label>
-      <input id="add-url" placeholder="https://...  or  http://localhost:3000  or  C:\path\page.html">
+      <div class="addr">
+        <input id="add-url" placeholder="https://...  or  http://localhost:3000  or  a folder">
+        <button type="button" class="btn ghost" id="add-folder">Choose folder…</button>
+      </div>
+      <div class="drop" id="add-drop">…or drop your app's folder here (it needs an index.html).<br>App Hub keeps its own copy.</div>
       <div class="error" id="add-error"></div>
       <div class="row">
         <button type="button" class="btn ghost" id="add-cancel">Cancel</button>

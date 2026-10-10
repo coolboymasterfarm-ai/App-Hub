@@ -29,7 +29,7 @@ function renderTabs() {
 }
 
 function show(id) {
-  if (id === 'clipforge' && !cfReady) { id = 'home'; $('setup-banner').scrollIntoView(); }
+  if (id === 'clipforge' && !cfReady) { id = 'home'; $('installs').scrollIntoView(); }
   current = id;
   const fixed = ['home', 'clipforge', 'models'].includes(id);
   if (!fixed && !open.includes(id)) open.push(id);
@@ -78,6 +78,22 @@ function openAdd() {
   $('add-name').value = ''; $('add-url').value = ''; $('add-error').textContent = '';
   $('add-dialog').showModal();
 }
+function setFolder(dir) {
+  if (!dir) return;
+  $('add-url').value = dir;
+  if (!$('add-name').value.trim()) $('add-name').value = dir.split(/[\\/]/).filter(Boolean).pop().slice(0, 40);
+  $('add-error').textContent = '';
+}
+$('add-folder').onclick = async () => setFolder(await api.pickFolder());
+const drop = $('add-drop');
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = (e) => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f) setFolder(api.pathForFile(f));
+};
 $('add-cancel').onclick = () => $('add-dialog').close();
 $('add-form').onsubmit = async (e) => {
   e.preventDefault();
@@ -88,20 +104,57 @@ $('add-form').onsubmit = async (e) => {
   renderHome();
 };
 
-async function refreshStatus() {
-  cfReady = (await api.status()).cfReady;
-  $('setup-banner').hidden = cfReady;
+// ---------------------------------------------------------------- one-click installs
+
+let installs = [];
+const logs = {}; // app id -> output lines
+
+function renderInstalls() {
+  const missing = installs.filter((x) => !x.installed);
+  $('installs').hidden = !missing.length;
+  const busyNow = installs.some((x) => x.installing);
+  $('install-all').disabled = busyNow;
+  $('install-list').replaceChildren(...missing.map((x) => {
+    const btn = el('button', { className: 'btn', textContent: x.installing ? 'Installing…' : 'Install', disabled: busyNow });
+    btn.onclick = () => install(x.id);
+    const lines = logs[x.id] || [];
+    return el('div', { className: 'inst' },
+      el('div', { className: 'inst-row' }, el('div', {}, el('b', { textContent: x.name }), el('div', { className: 'muted', textContent: x.note })), btn),
+      el('div', { className: 'last', id: 'last-' + x.id, textContent: lines[lines.length - 1] || '' }),
+      el('details', { hidden: !lines.length }, el('summary', { textContent: 'Show details' }), el('pre', { id: 'log-' + x.id, textContent: lines.join('\n') })));
+  }));
 }
 
-$('setup-btn').onclick = async () => {
-  $('setup-btn').disabled = true;
-  $('setup-btn').textContent = 'Setting up… (see the other window)';
-  const r = await api.setup();
-  $('setup-btn').disabled = false;
-  $('setup-btn').textContent = 'Run setup';
+async function refreshStatus() {
+  installs = await api.installState();
+  cfReady = installs.find((x) => x.id === 'clipforge').installed;
+  renderInstalls();
+}
+
+async function install(id) {
+  logs[id] = [];
+  const x = installs.find((i) => i.id === id);
+  if (x) x.installing = true;
+  renderInstalls();
+  const r = await api.install(id);
   await refreshStatus();
-  if (!r.ok) alert(r.error || 'Setup did not finish. Scroll up in the setup window for the reason, then try again.');
+  if (current === 'models') loadModels();
+  if (!r.ok) alert(r.error);
+  return r.ok;
+}
+
+$('install-all').onclick = async () => {
+  // Ollama first: ClipForge's setup and its AI both look for it.
+  for (const x of installs.filter((i) => !i.installed)) if (!(await install(x.id))) break;
 };
+
+api.onInstallLog(({ id, line }) => {
+  (logs[id] = logs[id] || []).push(line);
+  if (logs[id].length > 500) logs[id].shift();
+  const last = $('last-' + id), pre = $('log-' + id);
+  if (last) last.textContent = line;
+  if (pre) { pre.textContent = logs[id].join('\n'); pre.parentElement.hidden = false; pre.scrollTop = pre.scrollHeight; }
+});
 
 // ---------------------------------------------------------------- models
 
@@ -178,9 +231,10 @@ api.onProgress((p) => {
 $('refresh').onclick = loadModels;
 $('ollama-btn').onclick = async () => {
   $('ollama-btn').disabled = true;
-  const r = await api.installOllama();
+  $('ollama-btn').textContent = 'Installing… (progress on Home)';
+  await install('ollama');
   $('ollama-btn').disabled = false;
-  if (!r.ok) alert(r.error);
+  $('ollama-btn').textContent = 'Install Ollama';
   setTimeout(loadModels, 3000); // give "ollama serve" a moment to come up
 };
 

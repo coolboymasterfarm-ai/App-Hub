@@ -42,3 +42,14 @@ test('app list add/remove/save/load', () => {
   fs.writeFileSync(file, '{broken');
   assert.deepStrictEqual(apps.load(file), []);
 });
+
+test('folder apps', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apphub-folder-'));
+  assert.throws(() => apps.toUrl(dir), /index\.html/);
+  fs.writeFileSync(path.join(dir, 'game.html'), '<p>only page</p>');
+  assert.match(apps.toUrl(dir), /game\.html$/);
+  fs.writeFileSync(path.join(dir, 'other.html'), '');
+  assert.throws(() => apps.entryHtml(dir), /index\.html/);
+  fs.writeFileSync(path.join(dir, 'index.html'), '');
+  assert.match(apps.toUrl(dir), /index\.html$/);
+});

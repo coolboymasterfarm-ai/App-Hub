@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -22,6 +22,7 @@ const CF_SETTINGS = path.join(CF_DIR, 'data', 'settings.json');
 const WHISPER_DIR = path.join(CF_DIR, 'data', 'models', 'whisper');
 const OLLAMA = 'http://127.0.0.1:11434';
 const APPS_FILE = () => path.join(app.getPath('userData'), 'apps.json');
+const APPS_DIR = () => path.join(app.getPath('userData'), 'apps'); // folder apps are copied here
 
 let server = null;
 let win = null;
@@ -46,18 +47,6 @@ function startClipForge() {
   server.on('exit', (c) => { console.error('ClipForge server exited', c); server = null; });
 }
 
-// Runs ClipForge's own Install.bat in a console window the user can watch.
-function runSetup() {
-  return new Promise((resolve) => {
-    if (!WIN) return resolve({ ok: false, error: 'Setup runs on Windows only.' });
-    // CF_SKIP_MODEL: the user picks a chat model that fits their PC in the Models tab instead.
-    const p = spawn('cmd.exe', ['/c', 'start "ClipForge setup" /wait cmd /c Install.bat'],
-      { cwd: CF_DIR, windowsVerbatimArguments: true, env: { ...process.env, CF_SKIP_MODEL: '1' } });
-    p.on('exit', () => { startClipForge(); resolve({ ok: cfReady() }); });
-    p.on('error', (e) => resolve({ ok: false, error: e.message }));
-  });
-}
-
 // ---------------------------------------------------------------- Ollama
 
 async function ollama(pathname, opts = {}) {
@@ -80,13 +69,63 @@ async function startOllama() {
   p.unref();
 }
 
-function installOllama() {
+// ---------------------------------------------------------------- one-click installs
+
+// Apps the hub can install. Each runs hidden (no console window); its output streams to the hub page.
+const INSTALLERS = {
+  ollama: {
+    name: 'Ollama',
+    note: 'Runs the AI chat models on this PC (free). ClipForge uses it to pick and title clips.',
+    installed: async () => fs.existsSync(ollamaExe()) || !!(await ollamaModels()),
+    cmd: () => ['winget install -e --id Ollama.Ollama --accept-source-agreements --accept-package-agreements --silent', {}],
+    after: startOllama,
+  },
+  clipforge: {
+    name: 'ClipForge',
+    note: 'AI auto-clipper: long video in, short vertical clips out. Installs Python, ffmpeg and its tools (5-15 min).',
+    installed: async () => cfReady(),
+    // CF_SKIP_MODEL: the user picks a chat model that fits their PC in the AI Models tab instead.
+    cmd: () => ['Install.bat', { cwd: CF_DIR, env: { ...process.env, CF_SKIP_MODEL: '1' } }],
+    after: startClipForge,
+  },
+};
+let installing = null;
+
+const installLog = (id, line) => win && win.webContents.send('install:log', { id, line });
+
+async function installState() {
+  return Promise.all(Object.entries(INSTALLERS).map(async ([id, x]) =>
+    ({ id, name: x.name, note: x.note, installed: await x.installed(), installing: installing === id })));
+}
+
+function runInstall(id) {
+  const x = INSTALLERS[id];
   return new Promise((resolve) => {
-    if (!WIN) return resolve({ ok: false, error: 'Install Ollama from https://ollama.com' });
-    const p = spawn('cmd.exe', ['/c', 'start "Install Ollama" /wait winget install -e --id Ollama.Ollama --accept-source-agreements --accept-package-agreements'],
-      { windowsVerbatimArguments: true });
-    p.on('exit', async () => { await startOllama(); resolve({ ok: true }); });
-    p.on('error', (e) => resolve({ ok: false, error: e.message }));
+    if (!x) return resolve({ ok: false, error: 'Unknown app.' });
+    if (installing) return resolve({ ok: false, error: `${INSTALLERS[installing].name} is still installing.` });
+    if (!WIN) return resolve({ ok: false, error: 'Installing runs on Windows only.' });
+    installing = id;
+    const [cmd, opts] = x.cmd();
+    const p = spawn('cmd.exe', ['/d', '/c', cmd], { ...opts, windowsHide: true });
+    p.stdin.end(); // answers Install.bat's "pause" so it never waits for a key
+    let buf = '';
+    const onData = (d) => {
+      buf += d;
+      const lines = buf.split(/[\r\n]+/);
+      buf = lines.pop();
+      for (const l of lines) if (l.trim()) installLog(id, l.trim());
+    };
+    p.stdout.on('data', onData);
+    p.stderr.on('data', onData);
+    const done = async (error) => {
+      installing = null;
+      if (buf.trim()) installLog(id, buf.trim());
+      const ok = await x.installed();
+      if (ok) await x.after();
+      resolve(ok ? { ok } : { ok, error: error || `${x.name} did not finish installing. See the log for the reason.` });
+    };
+    p.on('exit', () => done());
+    p.on('error', (e) => done(e.message));
   });
 }
 
@@ -229,6 +268,25 @@ function closeTab(id) {
   views.delete(id);
 }
 
+// A folder app is copied into the hub, so it keeps working if the original folder moves.
+function addApp(list, name, address) {
+  const src = String(address || '').trim().replace(/^"(.*)"$/, '$1');
+  if (!apps.isDir(src)) return apps.add(list, name, address);
+  apps.entryHtml(src); // throws a readable error before anything is copied
+  const dest = path.join(APPS_DIR(), Date.now().toString(36) + '-' + path.basename(src).replace(/[^\w.-]/g, '_'));
+  fs.cpSync(src, dest, { recursive: true, filter: (f) => path.basename(f) !== 'node_modules' && path.basename(f) !== '.git' });
+  return apps.add(list, name || path.basename(src), dest);
+}
+
+function removeApp(list, id) {
+  const a = list.find((x) => x.id === id);
+  if (a && a.url.startsWith('file:')) { // delete the hub's own copy, never a folder outside it
+    const dir = path.relative(APPS_DIR(), require('url').fileURLToPath(a.url)).split(path.sep)[0];
+    if (dir && dir !== '..' && !path.isAbsolute(dir)) fs.rmSync(path.join(APPS_DIR(), dir), { recursive: true, force: true });
+  }
+  return apps.remove(list, id);
+}
+
 function tryApps(fn) {
   try {
     const list = fn(apps.load(APPS_FILE()));
@@ -252,15 +310,19 @@ function createWindow() {
 ipcMain.on('start-clipforge', startClipForge);
 ipcMain.on('open-app', (_e, id) => { if (id === 'clipforge') { startClipForge(); win && win.webContents.send('switch-tab', 'clipforge'); } });
 ipcMain.handle('hub:status', () => ({ cfReady: cfReady(), cfDir: CF_DIR }));
-ipcMain.handle('hub:setup', runSetup);
-ipcMain.handle('ollama:install', installOllama);
+ipcMain.handle('install:state', installState);
+ipcMain.handle('install:run', (_e, id) => runInstall(id));
 ipcMain.handle('models:overview', overview);
 ipcMain.handle('models:download', (_e, kind, id) => download(kind, id));
 ipcMain.handle('models:delete', (_e, kind, id) => remove(kind, id));
 ipcMain.handle('models:use', (_e, kind, id) => use(kind, id));
 ipcMain.handle('apps:list', () => apps.load(APPS_FILE()));
-ipcMain.handle('apps:add', (_e, name, address) => tryApps((l) => apps.add(l, name, address)));
-ipcMain.handle('apps:remove', (_e, id) => { closeTab(id); return tryApps((l) => apps.remove(l, id)); });
+ipcMain.handle('apps:add', (_e, name, address) => tryApps((l) => addApp(l, name, address)));
+ipcMain.handle('apps:remove', (_e, id) => { closeTab(id); return tryApps((l) => removeApp(l, id)); });
+ipcMain.handle('apps:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose your app folder (with an index.html)', properties: ['openDirectory'] });
+  return r.canceled ? null : r.filePaths[0];
+});
 ipcMain.on('tab:show', (_e, id) => showTab(id));
 ipcMain.on('tab:close', (_e, id) => closeTab(id));
 

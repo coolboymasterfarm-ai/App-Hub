@@ -3,10 +3,21 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL, fileURLToPath } = require('url');
 
+// The page a folder app opens with: index.html, else the folder's only .html file.
+function entryHtml(dir) {
+  const html = fs.readdirSync(dir).filter((f) => /\.html?$/i.test(f));
+  const entry = html.find((f) => /^index\.html?$/i.test(f)) || (html.length === 1 ? html[0] : null);
+  if (!entry) throw new Error('That folder needs an index.html (the page your app starts on).');
+  return path.join(dir, entry);
+}
+
+const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+
 // Returns a loadable URL, or throws an Error with a message the user can read.
 function toUrl(address) {
   const a = String(address || '').trim().replace(/^"(.*)"$/, '$1');
   if (!a) throw new Error('Type an address.');
+  if (isDir(a)) return pathToFileURL(entryHtml(a)).href;
   if (/^https?:\/\//i.test(a)) {
     try { return new URL(a).href; } catch { throw new Error('That web address is not valid.'); }
   }
@@ -43,4 +54,4 @@ function add(list, name, address) {
 
 const remove = (list, id) => list.filter((a) => a.id !== id);
 
-module.exports = { toUrl, load, save, add, remove };
+module.exports = { toUrl, entryHtml, isDir, load, save, add, remove };
