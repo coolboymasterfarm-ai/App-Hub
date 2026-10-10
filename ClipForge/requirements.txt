@@ -1,0 +1,19 @@
+# ClipForge - everything runs on this PC
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+requests>=2.31
+numpy>=1.26,<3
+
+# speech to text with word timings (GPU if you have one, CPU if not)
+faster-whisper>=1.1.0
+
+# downloading - [default] brings yt-dlp-ejs, which solves YouTube's JS challenge
+yt-dlp[default]>=2025.10.22
+
+# face tracking for the 9:16 reframe
+opencv-python-headless>=4.9
+
+# CUDA libraries so faster-whisper finds cuBLAS/cuDNN on Windows (harmless without an NVIDIA GPU)
+nvidia-cublas-cu12; platform_system == "Windows"
+nvidia-cudnn-cu12>=9,<10; platform_system == "Windows"

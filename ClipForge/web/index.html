@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClipForge</title>
+<style>
+:root{
+  --bg:#0b0c0f;--panel:#15171c;--panel2:#1c1f27;--line:#2a2f3a;--text:#eef0f4;--mut:#8b92a1;
+  --acc:#ffd400;--acc2:#39ff88;--bad:#ff5a5f;--ok:#39d98a;--warn:#ffb020;--r:12px;
+  --shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 10px 28px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:14px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid transparent;border-radius:8px;padding:8px 12px;background:var(--panel2);
+  transition:background .15s,border-color .15s,transform .05s}
+button:hover{background:#262b36;border-color:#343a48}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.45;cursor:default}
+button.pri{background:var(--acc);color:#111;font-weight:700;border-color:#e6c000}
+button.pri:hover{background:#ffe04d;border-color:#ffe04d}
+button.ghost{background:transparent;border:1px solid var(--line)}
+button.ghost:hover{background:#1c2028;border-color:#3a4150}
+button.danger{color:var(--bad);border-color:#4a2a2e}
+button.danger:hover{background:#2a1618}
+input,select,textarea{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 11px;
+  outline:none;min-width:0}
+input:focus,select:focus,textarea:focus{border-color:#5a6378;box-shadow:0 0 0 3px rgba(255,212,0,.12)}
+a{color:var(--acc)}
+a.btn{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:8px 12px;text-decoration:none;font-weight:700;background:var(--acc);color:#111;border:1px solid #e6c000}
+a.btn:hover{background:#ffe04d}
+.app{display:grid;grid-template-columns:248px 1fr;height:100vh;height:100dvh}
+aside{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:#101216}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 12px;font-weight:800;font-size:16px;letter-spacing:.2px}
+.logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--acc),#ff7a00);
+  display:grid;place-items:center;color:#111;font-weight:900;font-size:13px}
+.newbtn{margin:0 12px 10px;width:calc(100% - 24px)}
+.plist{overflow:auto;flex:1;padding:2px 8px 12px}
+.pitem{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.pitem:hover{background:var(--panel)}
+.pitem.on{background:var(--panel2);border-color:var(--line)}
+.pitem img,.pitem .ph{width:56px;height:32px;border-radius:6px;object-fit:cover;background:#222;flex:none}
+.pitem .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:13px}
+.pitem .s{font-size:12px;color:var(--mut)}
+.side-foot{padding:10px 12px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:11.5px;padding:3px 8px;border-radius:99px;background:var(--panel2);color:var(--mut);white-space:nowrap}
+.pill b{color:var(--text);font-weight:600}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px;background:var(--mut)}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+main{overflow:auto;min-height:0}
+.wrap{max-width:1120px;margin:0 auto;padding:24px 24px 48px}
+.hero{padding:36px 0 8px;text-align:center}
+.hero h1{font-size:34px;line-height:1.1;margin:0 0 8px;letter-spacing:-.6px}
+.hero h1 span{color:var(--acc)}
+.hero p{color:var(--mut);margin:0 auto 22px;max-width:560px;font-size:14.5px}
+.drop{border:1.5px dashed #343a46;border-radius:16px;padding:16px;background:var(--panel);max-width:720px;margin:0 auto;box-shadow:var(--shadow)}
+.drop.over{border-color:var(--acc);background:#1a1a12}
+.inrow{display:flex;gap:8px;align-items:stretch}
+.inrow textarea{flex:1;padding:12px 14px;font-size:15px;border-radius:10px;resize:none;background:var(--panel2);
+  border:1px solid var(--line);color:inherit;font:inherit;font-size:15px;outline:none;min-height:48px;max-height:140px;line-height:1.4}
+.inrow textarea:focus{border-color:#5a6378;box-shadow:0 0 0 3px rgba(255,212,0,.12)}
+.more{margin-top:14px;text-align:left}
+.more summary{cursor:pointer;color:var(--mut);font-size:13px;text-align:center;list-style:none}
+.more summary::-webkit-details-marker{display:none}
+.more .mrow{display:grid;grid-template-columns:1fr 110px 110px;gap:10px;margin-top:12px}
+@media (max-width:640px){.more .mrow{grid-template-columns:1fr}}
+.more label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px}
+.more input{width:100%}
+.subs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.subs div{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+.subs i{display:block;height:4px;border-radius:4px;background:var(--panel2);margin-top:3px;overflow:hidden}
+.subs i b{display:block;height:100%;background:var(--acc)}
+.tag{position:absolute;bottom:58px;left:10px;background:rgba(0,0,0,.72);border-radius:99px;padding:3px 9px;font-size:11.5px}
+.inrow button.pri{padding:0 18px;font-size:14px;border-radius:10px;white-space:nowrap}
+.or{color:var(--mut);font-size:13px;margin:12px 0 0}
+.or button{background:none;color:var(--acc);padding:0;text-decoration:underline}
+.opts{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:16px;align-items:flex-end}
+.opt{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.opt label{font-size:12px;color:var(--mut)}
+
+/* The output-options disclosure. Same visual language as .more above it, so
+   the two read as one pattern rather than two unrelated things. */
+.more-opts{margin-top:10px}
+.more-opts>summary{display:flex;align-items:center;justify-content:center;gap:8px}
+/* The current selection, restated in the closed state — so hiding the
+   controls does not hide the fact that they are set to something. */
+.opts-summary{color:var(--text);opacity:.72;font-size:12.5px}
+.opts-summary:empty{display:none}
+.more-opts .caret{display:inline-block;transition:transform .18s}
+.more-opts[open] .caret{transform:rotate(180deg)}
+.more-opts[open]>summary{color:var(--text)}
+/* Inside the disclosure the row is a normal left-aligned group rather than
+   the centred hero treatment, because it is now a settings panel.
+
+   NOTE: this needs an explicit `display:none` in the closed state, not just
+   the absence of a rule. Chromium implements <details> hiding on a content
+   slot, and an explicit `display` on the child wins over it — verified with a
+   throwaway element: `<details><div style="display:flex">` is still laid out
+   while the details is closed. The base `.opts{display:flex}` rule therefore
+   leaked all fourteen buttons, and the disclosure looked broken.
+   Keeping the base rule untouched and overriding both states here is safer
+   than editing `.opts`, which the settings modal also uses. */
+.more-opts > .opts{display:none;margin-top:14px;align-items:flex-end;justify-content:flex-start;
+  gap:12px;flex-wrap:wrap}
+.more-opts[open] > .opts{display:flex}
+.seg{display:inline-flex;background:var(--panel2);border-radius:10px;padding:3px;gap:2px}
+.seg button{background:transparent;padding:6px 12px;border-radius:8px;font-size:13px;color:var(--mut)}
+.seg button.on{background:#2d323d;color:var(--text)}
+.feat{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:880px;margin:28px auto 0}
+.feat div{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;text-align:left}
+.feat b{display:block;margin-bottom:3px}
+.feat span{color:var(--mut);font-size:12.5px}
+.phead{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+.phead h2{margin:0 0 4px;font-size:20px;line-height:1.25;letter-spacing:-.2px}
+.phead .sub{color:var(--mut);font-size:13px}
+.phead .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:none}
+.jobcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:18px;box-shadow:var(--shadow)}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.step{min-width:0;font-size:12px;color:var(--mut);display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid transparent;border-radius:10px;padding:7px 8px}
+.step i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#111318;
+  font-style:normal;font-size:11px;font-weight:700;flex:none}
+.step.on{color:var(--text);border-color:rgba(255,212,0,.45);background:#221f12}
+.step.on i{background:var(--acc);color:#111}
+.step.done{color:#c9d4cc}
+.step.done i{background:#23402f;color:var(--ok)}
+.bar{height:6px;border-radius:99px;background:#0e1014;overflow:hidden;border:1px solid #22262f}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),#ff9d00);transition:width .45s ease}
+.jobline{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:12px;font-size:13px}
+.jobmeta{min-width:0}
+.jobmeta b{font-weight:650}
+.jobline .st{color:var(--mut)}
+.queue{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.qrow{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--mut);background:var(--panel2);border-radius:8px;padding:7px 10px}
+.qrow b{color:var(--text);font-weight:600}
+.qbadge{margin-left:auto;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#c8a84a;background:#2a2412;border-radius:99px;padding:2px 8px}
+details.log{margin-top:10px}
+details.log summary{cursor:pointer;color:var(--mut);font-size:12.5px}
+details.log pre{background:#0a0b0d;border-radius:10px;padding:10px 12px;max-height:220px;overflow:auto;
+  font:12px/1.5 Consolas,monospace;color:#b9c0cc;white-space:pre-wrap;margin:8px 0 0}
+.err{background:#2a1416;border:1px solid #5a2328;color:#ffb3b6;border-radius:12px;padding:12px 14px;margin-bottom:18px;
+  display:flex;gap:12px;align-items:center}
+.err span{flex:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.clip{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.vid{position:relative;aspect-ratio:9/16;background:#07080a}
+.vid video,.vid img{width:100%;height:100%;object-fit:cover;display:block}
+.vid .wait{position:absolute;inset:0;display:grid;place-items:center;color:var(--mut);font-size:13px;text-align:center;padding:20px}
+.spin{width:28px;height:28px;border:3px solid #333;border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 10px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.score{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);border-radius:99px;
+  padding:4px 10px;font-weight:800;font-size:13px}
+.score.hi{color:var(--acc2)}.score.mid{color:var(--acc)}.score.lo{color:#ddd}
+.dur{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.72);border-radius:99px;padding:4px 9px;font-size:12px}
+.cbody{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+.ctitle{font-weight:700;font-size:15px;line-height:1.3}
+.why{color:var(--mut);font-size:12.5px}
+.cacts{display:flex;gap:6px;margin-top:auto;padding-top:4px}
+.cacts>*{flex:1;text-align:center;font-size:13px;padding:8px 6px;text-decoration:none;color:var(--text);border-radius:10px;background:var(--panel2)}
+.cacts a.pri{background:var(--acc);color:#111;font-weight:700}
+.editor{display:none;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.editor.open{display:flex}
+.editor label{font-size:12px;color:var(--mut)}
+.trim{display:grid;grid-template-columns:1fr;gap:8px}
+.nud{display:flex;align-items:center;gap:4px}
+.nud input{flex:1;width:0;min-width:60px;text-align:center;padding:7px 4px}
+.nud button{padding:6px 9px}
+.ideas{display:flex;flex-wrap:wrap;gap:6px}
+.ideas button{font-size:12px;padding:5px 9px;border-radius:99px;text-align:left}
+.capedit{width:100%;resize:vertical;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+  color:inherit;font:inherit;font-size:12.5px;line-height:1.45;outline:none}
+.capedit:focus{border-color:#4a5163}
+.quote{font-size:12.5px;color:#c3c8d2;background:var(--panel2);border-radius:10px;padding:8px 10px;max-height:110px;overflow:auto}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;z-index:9;padding:16px}
+.modal.open{display:flex}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(760px,100%);max-height:min(86vh,760px);
+  display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.55)}
+.sheet header{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.sheet header h3{margin:0;flex:1}
+.sheet .tabs{display:flex;gap:4px;padding:10px 20px 0}
+.sheet .tabs button{background:transparent;color:var(--mut);border-radius:8px 8px 0 0}
+.sheet .tabs button.on{color:var(--text);background:var(--panel2)}
+.sheet .body{padding:18px 20px;overflow:auto}
+.sheet footer{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;align-items:center}
+.sheet footer .note{margin-right:auto;color:var(--mut);font-size:12.5px}
+.fg{display:grid;grid-template-columns:minmax(140px,200px) 1fr;gap:12px 16px;align-items:center}
+.fg .h{grid-column:1/-1;font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin-top:6px}
+.fg label{color:#c9ced8}
+.fg input[type=text],.fg input[type=password]{width:100%}
+.fg small{display:block;color:var(--mut);font-size:12px}
+.sw{position:relative;width:42px;height:24px;display:inline-block}
+.sw input{opacity:0;width:0;height:0}
+.sw span{position:absolute;inset:0;background:#343944;border-radius:99px;transition:.2s;cursor:pointer}
+.sw span:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.sw input:checked+span{background:var(--acc)}
+.sw input:checked+span:before{transform:translateX(18px);background:#111}
+.aibox{background:var(--panel2);border-radius:12px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.7}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:#262b35;border:1px solid #333a47;
+  padding:10px 16px;border-radius:12px;opacity:0;transition:.25s;pointer-events:none;z-index:20;max-width:80vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.empty{color:var(--mut);text-align:center;padding:30px 0}
+@media (max-width:980px){.feat{grid-template-columns:1fr 1fr}.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  aside{display:none}
+  .wrap{padding:16px 14px 40px}
+  .hero{padding:20px 0 4px}
+  .hero h1{font-size:28px}
+  .fg{grid-template-columns:1fr}
+  .phead{flex-direction:column}
+  .phead .acts{margin-left:0;justify-content:flex-start}
+  .jobline{flex-wrap:wrap}
+}
+@media (max-width:520px){.feat{grid-template-columns:1fr}.steps{grid-template-columns:1fr}.inrow{flex-direction:column}.inrow button.pri{padding:10px 14px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><div class="logo">C</div>ClipForge</div>
+    <button class="pri newbtn" onclick="go('')">+ New video</button>
+    <div class="plist" id="plist"></div>
+    <div class="side-foot">
+      <div class="pills" id="pills"></div>
+      <button class="ghost" onclick="openSettings()">Settings</button>
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<div class="modal" id="modal" onclick="if(event.target===this)closeSettings()">
+  <div class="sheet">
+    <header><h3>Settings</h3><button class="ghost" onclick="closeSettings()">Close</button></header>
+    <div class="tabs" id="tabs"></div>
+    <div class="body" id="sbody"></div>
+    <footer><span class="note" id="snote">Changes apply to the next clips you make (or re-render).</span>
+      <button class="pri" onclick="saveSettings()">Save</button></footer>
+  </div>
+</div>
+<input type="file" id="file" accept="video/*,.mkv,.mov,.webm" hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api = async (path, opts = {}) => {
+  const r = await fetch(path, {headers: opts.body && !(opts.body instanceof FormData) ? {"Content-Type": "application/json"} : {}, ...opts});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || r.statusText);
+  return d;
+};
+const fmt = s => { s = Math.max(0, s || 0); const m = Math.floor(s / 60); return m + ":" + String(Math.floor(s % 60)).padStart(2, "0"); };
+let S = {}, ST = null, cur = null, P = null, openEd = new Set(), lastSig = "";
+function toast(m, ms = 2600) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms); }
+
+// ------------------------------------------------------------ routing
+function go(pid) { location.hash = pid ? "#/p/" + pid : "#/"; }
+window.addEventListener("hashchange", route);
+function route() {
+  const m = location.hash.match(/^#\/p\/(\w+)/);
+  cur = m ? m[1] : null; P = null; lastSig = ""; openEd.clear();
+  cur ? loadProject() : home();
+  loadList();
+}
+
+// ------------------------------------------------------------ sidebar
+const SLABEL = {queued:"Waiting",downloading:"Downloading",transcribing:"Transcribing",finding:"Finding moments",
+  rendering:"Editing",done:"Ready",error:"Failed",cancelled:"Stopped"};
+async function loadList() {
+  const list = await api("/api/projects").catch(() => []);
+  $("#plist").innerHTML = list.length ? list.map(p => `
+    <div class="pitem ${p.id === cur ? "on" : ""}" onclick="go('${p.id}')">
+      ${p.thumb ? `<img src="/files/${p.id}/${p.thumb}" alt="">` : `<div class="ph"></div>`}
+      <div style="min-width:0"><div class="t">${esc(p.title)}</div>
+      <div class="s">${SLABEL[p.status] || p.status}${p.clips ? " · " + p.clips + " clips" : ""}</div></div>
+    </div>`).join("") : `<div class="empty" style="font-size:13px">Your videos show up here</div>`;
+}
+async function loadStatus(fresh) {
+  try { ST = await api("/api/status" + (fresh ? "?fresh=1" : "")); } catch { return; }
+  const a = ST.ai, ai = a.provider === "omniroute" ? ["ok", "OmniRoute"] : a.provider === "ollama" ? ["ok", "Ollama · " + a.model] : ["warn", "Built-in scorer"];
+  $("#pills").innerHTML = `
+    <span class="pill" title="Who picks and titles the clips"><span class="dot ${ai[0]}"></span>AI <b>${esc(ai[1])}</b></span>
+    <span class="pill" title="Speech-to-text"><span class="dot ${ST.whisper.device === "cuda" ? "ok" : "warn"}"></span>Whisper <b>${ST.whisper.device === "cuda" ? "GPU" : "CPU"}</b></span>
+    <span class="pill" title="Caption renderer"><span class="dot ${ST.hyperframes ? "ok" : "warn"}"></span><b>${ST.hyperframes ? "HyperFrames" : "Basic captions"}</b></span>
+    <span class="pill"><span class="dot ${ST.ffmpeg ? "ok" : "bad"}"></span>ffmpeg <b>${ST.encoder === "nvenc" ? "NVENC" : "x264"}</b></span>`;
+}
+
+// ------------------------------------------------------------ home
+function segCtl(key, opts) {
+  return `<div class="seg" data-k="${key}">${opts.map(([v, l]) => `<button class="${String(S[key]) === String(v) ? "on" : ""}" onclick="quick('${key}','${v}',this)">${l}</button>`).join("")}</div>`;
+}
+let OPTS = {caption_styles: [], transitions: []};   // from /api/options - the server owns these lists
+async function quick(k, v, el) {
+  const val = k === "clip_count" ? +v : v;
+  if (el) el.parentNode.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === el));
+  S = await api("/api/settings", {method: "POST", body: JSON.stringify({[k]: val})});
+  // These settings are applied live, so the closed disclosure's summary has to
+  // follow them or it becomes a stale label.
+  if (typeof paintOptsSummary === "function") paintOptsSummary();
+}
+function home() {
+  $("#main").innerHTML = `<div class="wrap">
+    <div class="hero">
+      <h1>Long video in.<br><span>Viral clips</span> out.</h1>
+      <p>Paste a YouTube link or drop a video. ClipForge transcribes it, has AI pick the moments worth posting, follows the speaker's face into 9:16, cuts the dead air and adds animated captions — all on this PC.</p>
+      <div class="drop" id="drop">
+        <div class="inrow">
+          <textarea id="url" rows="1" placeholder="https://www.youtube.com/watch?v=…   (one link per line for several)" autocomplete="off"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();start()}"></textarea>
+          <button class="pri" id="gobtn" onclick="start()">Make clips</button>
+        </div>
+        <div class="or">or <button onclick="$('#file').click()">choose a video file</button> — or drag one onto this box</div>
+        <details class="more" id="more"><summary>More options: what to look for, which part of the video ▾</summary>
+          <div class="mrow">
+            <div><label>Clips about (optional)</label><input id="topic" maxlength="200" placeholder="e.g. his story about the fight, money advice…"></div>
+            <div><label>From (minute)</label><input id="from" inputmode="decimal" placeholder="0"></div>
+            <div><label>To (minute)</label><input id="to" inputmode="decimal" placeholder="end"></div>
+          </div>
+        </details>
+        <!-- Output settings.
+             These were a flat row of five segmented controls sitting visible
+             under the input on first load — fourteen buttons, none of which
+             matter until there is something to render. The defaults are good,
+             so they now live behind their own disclosure, and the summary
+             states what is currently selected so the choice is still visible
+             without opening it.
+
+             The controls keep their original ids and the .seg markup, because
+             the quick() handlers and the settings modal read them by
+             position; only the containing element moved. -->
+        <details class="more more-opts" id="outopts">
+          <summary>
+            Output options
+            <span class="opts-summary" id="opts-summary"></span>
+            <span class="caret" aria-hidden="true">▾</span>
+          </summary>
+          <div class="opts">
+            <div class="opt"><label>Clips</label>${segCtl("clip_count", [[3,"3"],[5,"5"],[8,"8"],[12,"12"]])}</div>
+            <div class="opt"><label>Length</label>${segCtl("clip_length", [["short","15–35s"],["medium","25–60s"],["long","45–90s"]])}</div>
+            <div class="opt"><label>Captions</label><select onchange="quick('caption_style',this.value)">${OPTS.caption_styles.map(([v, l]) =>
+              `<option value="${v}" ${S.caption_style === v ? "selected" : ""}>${l.split(" - ")[0]}</option>`).join("")}</select></div>
+            <div class="opt"><label>Caption spot</label>${segCtl("caption_position", [["auto","Auto"],["top","Top"],["middle","Middle"],["bottom","Bottom"]])}</div>
+            <div class="opt"><label>Title</label>${segCtl("hook_style", [["card","Card"],["slam","Slam"],["type","Type"]])}</div>
+          </div>
+        </details>
+      </div>
+      <div class="feat">
+        <div><b>AI clip picker</b><span>OmniRoute or local Ollama rates every moment like a producer</span></div>
+        <div><b>Face tracking</b><span>Follows whoever is talking, holds still between cuts</span></div>
+        <div><b>HyperFrames motion graphics</b><span>10 caption styles, animated hook titles, stat cards, emojis</span></div>
+        <div><b>Tight edit</b><span>Dead air and ums removed, punch-in zooms, loudness to −14 LUFS</span></div>
+      </div>
+    </div></div>`;
+  const d = $("#drop");
+  ["dragenter", "dragover"].forEach(e => d.addEventListener(e, ev => { ev.preventDefault(); d.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(e => d.addEventListener(e, ev => { ev.preventDefault(); d.classList.remove("over"); }));
+  d.addEventListener("drop", ev => ev.dataTransfer.files[0] && upload(ev.dataTransfer.files[0]));
+  paintOptsSummary();
+  setTimeout(() => $("#url") && $("#url").focus(), 50);
+}
+
+// Restate the current output settings in the closed disclosure's summary, so
+// moving the controls behind a disclosure did not also make the choice
+// invisible. Reads the live DOM rather than the S object, because the caption
+// select's label is server-provided.
+function paintOptsSummary() {
+  const box = $("#opts-summary");
+  if (!box) return;
+  // segCtl puts data-k ON the .seg element itself, not on a wrapper — the
+  // first version of this looked for `[data-k="x"] .seg button.on`, which
+  // never matches, so the summary silently rendered half-empty.
+  const on = k => {
+    const b = document.querySelector(`.seg[data-k="${k}"] button.on`);
+    return b ? b.textContent.trim() : null;
+  };
+  const sel = $("#outopts select");
+  const cap = sel && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent.trim() : null;
+  const n = on("clip_count");
+  const hook = on("hook_style");
+  const bits = [
+    n && n + (n === "1" ? " clip" : " clips"),
+    on("clip_length"),
+    cap && cap + " captions",
+    hook && hook + " titles",
+  ].filter(Boolean);
+  box.textContent = bits.length ? "· " + bits.join(" · ") : "";
+}
+async function start() {
+  const v = $("#url").value.trim();
+  if (!v) return toast("Paste a YouTube link first");
+  $("#gobtn").disabled = true;
+  try {
+    const r = await api("/api/projects", {method: "POST", body: JSON.stringify({input: v, ...extras()})});
+    if (r.count > 1) toast(r.count + " videos queued - they run one after another", 4000);
+    go(r.project);
+  }
+  catch (e) { toast(e.message, 5000); $("#gobtn").disabled = false; }
+}
+$("#file").addEventListener("change", e => e.target.files[0] && upload(e.target.files[0]));
+function extras() {
+  return {topic: $("#topic")?.value.trim() || "", from_min: $("#from")?.value.trim() || "", to_min: $("#to")?.value.trim() || ""};
+}
+function upload(f) {
+  const fd = new FormData(); fd.append("file", f);
+  Object.entries(extras()).forEach(([k, v]) => fd.append(k, v));
+  const x = new XMLHttpRequest();
+  x.open("POST", "/api/upload");
+  $("#main").innerHTML = `<div class="wrap"><div class="jobcard"><b>Uploading ${esc(f.name)}</b>
+    <div class="bar" style="margin-top:12px"><i id="upbar"></i></div><div class="jobline"><span class="st" id="uptxt">0%</span></div></div></div>`;
+  x.upload.onprogress = e => { if (e.lengthComputable) { const p = e.loaded / e.total * 100; $("#upbar").style.width = p + "%"; $("#uptxt").textContent = p.toFixed(0) + "% of " + (e.total / 1e9).toFixed(2) + " GB"; } };
+  x.onload = () => { try { const d = JSON.parse(x.responseText); if (x.status >= 400) throw new Error(d.detail); go(d.project); } catch (e) { toast(e.message || "Upload failed", 5000); home(); } };
+  x.onerror = () => { toast("Upload failed", 5000); home(); };
+  x.send(fd);
+}
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => { e.preventDefault(); if (!cur && e.dataTransfer.files[0] && !e.target.closest("#drop")) upload(e.dataTransfer.files[0]); });
+
+// ------------------------------------------------------------ project
+const STEPS = [["downloading","Get video"],["transcribing","Transcribe"],["finding","Pick moments"],["rendering","Edit clips"]];
+async function loadProject() {
+  if (!cur) return;
+  let p;
+  try { p = await api("/api/projects/" + cur); } catch { $("#main").innerHTML = `<div class="wrap empty">That project is gone.</div>`; return; }
+  const jobsFor = (ST?.jobs || []).filter(j => j.project === cur);
+  const sig = JSON.stringify([p.status, p.title, p.error, p.clips.map(c => [c.state, c.file, c.title, c.error, c.start, c.end])]);
+  if (sig !== lastSig) { lastSig = sig; P = p; renderProject(); }
+  P = p;
+  renderJob(jobsFor);
+}
+function scoreCls(s) { return s >= 75 ? "hi" : s >= 55 ? "mid" : "lo"; }
+function renderProject() {
+  const p = P, busy = !["done","error","cancelled"].includes(p.status);
+  const src = p.source ? `${fmt(p.source.duration)} long${p.source.uploader ? " · " + esc(p.source.uploader) : ""}` : esc(p.input || "");
+  const done = p.clips.filter(c => c.file).length;
+  const extra = (p.topic ? ` · about “${esc(p.topic)}”` : "") + (p.span ? ` · ${fmt(p.span[0])}–${p.span[1] ? fmt(p.span[1]) : "end"}` : "");
+  // a poll re-render must not wipe what the user is typing in an open editor
+  const typed = [...document.querySelectorAll(".editor.open input, .editor.open textarea")]
+    .filter(e => e.value !== e.defaultValue).map(e => [e.id, e.value]);
+  $("#main").innerHTML = `<div class="wrap">
+    <div class="phead">
+      <div style="min-width:0"><h2>${esc(p.title)}</h2><div class="sub">${src}${extra}${p.clips.length ? ` · ${done}/${p.clips.length} clips ready` : ""}</div></div>
+      <div class="acts">
+        ${done ? `<a class="btn" href="/api/projects/${p.id}/zip" title="Every clip + subtitles + post captions">Download all</a>` : ""}
+        ${done ? `<button class="ghost" onclick="api('/api/projects/${p.id}/open',{method:'POST'})">Open folder</button>` : ""}
+        ${done && !busy ? `<button class="ghost" onclick="rerenderAll()" title="Re-edit every clip with your current settings">Re-render all</button>` : ""}
+        ${!busy ? `<button class="ghost danger" onclick="delProject()">Delete</button>` : ""}
+      </div>
+    </div>
+    ${p.status === "error" || p.status === "cancelled" ? `<div class="err"><span>${p.status === "cancelled" ? "Stopped." : esc(p.error || "Something went wrong")}</span><button onclick="retry()">Retry</button></div>` : ""}
+    <div id="job"></div>
+    <div class="grid" id="grid">${p.clips.map(clipCard).join("")}</div>
+    ${!p.clips.length && !busy ? `<div class="empty">No clips yet.</div>` : ""}
+  </div>`;
+  for (const [id, v] of typed) { const e = document.getElementById(id); if (e) e.value = v; }
+}
+function clipCard(c) {
+  const len = c.duration || (c.end - c.start);
+  let media;
+  if (c.file && c.state !== "rendering") media = `<video src="/files/${P.id}/${c.file}" poster="${c.thumb ? `/files/${P.id}/${c.thumb}` : ""}" controls preload="none" playsinline></video>`;
+  else if (c.state === "rendering") media = `<div class="wait"><div><div class="spin"></div>Editing…</div></div>`;
+  else if (c.state === "error") media = `<div class="wait" style="color:#ffb3b6">This clip failed:<br>${esc(c.error || "")}</div>`;
+  else media = `<div class="wait">Waiting to be edited</div>`;
+  return `<div class="clip" id="c${c.n}">
+    <div class="vid">${media}<div class="score ${scoreCls(c.score)}" title="${c.source === "ai" ? "AI" : "Built-in"} virality score">${c.score}</div><div class="dur">${fmt(len)}</div>${c.split ? `<div class="tag">Split screen</div>` : ""}</div>
+    <div class="cbody">
+      <div class="ctitle">${esc(c.title)}</div>
+      ${c.reason ? `<div class="why">${esc(c.reason)}</div>` : ""}
+      ${c.scores ? `<div class="subs" title="Hook: first 3 seconds · Flow: makes sense alone · Value: teaches/moves/entertains · Trend: shareable">${["hook","flow","value","trend"].map(k =>
+        `<div>${k}<i><b style="width:${c.scores[k] || 0}%"></b></i></div>`).join("")}</div>` : ""}
+      <div class="cacts">
+        ${c.file ? `<a class="pri" href="/files/${P.id}/${c.file}" download="${esc((c.title || "clip").replace(/[\\/:*?"<>|]/g, "").slice(0, 60))}.mp4">Download</a>` : ""}
+        <button onclick="toggleEd(${c.n})">Edit</button>
+        ${c.description ? `<button onclick="copyDesc(${c.n})" title="Copy the post caption">Caption</button>` : ""}
+        ${c.srt ? `<a href="/files/${P.id}/${c.srt}" download title="Subtitle file">SRT</a>` : ""}
+        ${c.cover ? `<a href="/files/${P.id}/${c.cover}" download title="Cover / thumbnail image">Cover</a>` : ""}
+      </div>
+      <div class="editor ${openEd.has(c.n) ? "open" : ""}" id="ed${c.n}">
+        <label>Hook title</label>
+        <div class="nud"><input id="t${c.n}" value="${esc(c.title)}" maxlength="80" style="flex:1;width:0;text-align:left;padding:8px 10px">
+          <button onclick="ideas(${c.n}, this)" title="Suggest other titles">Ideas</button></div>
+        <div class="ideas" id="i${c.n}"></div>
+        <div class="trim">
+          <div><label>Start (${fmt(c.start)})</label><div class="nud"><button onclick="nud(${c.n},'s',-1)">−1s</button><input id="s${c.n}" value="${c.start.toFixed(1)}"><button onclick="nud(${c.n},'s',1)">+1s</button></div></div>
+          <div><label>End (${fmt(c.end)})</label><div class="nud"><button onclick="nud(${c.n},'e',-1)">−1s</button><input id="e${c.n}" value="${c.end.toFixed(1)}"><button onclick="nud(${c.n},'e',1)">+1s</button></div></div>
+        </div>
+        <label>Caption words <span style="opacity:.7">– fix any wrong words, the timing is kept</span></label>
+        <textarea id="x${c.n}" class="capedit" rows="4">${esc(c.text || "")}</textarea>
+        <button class="pri" onclick="saveClip(${c.n})" ${c.state === "rendering" ? "disabled" : ""}>Save &amp; re-render</button>
+      </div>
+    </div></div>`;
+}
+function renderJob(js) {
+  const box = $("#job"); if (!box) return;
+  const j = js[0];
+  if (!j) { if (box.innerHTML) { box.innerHTML = ""; } return; }
+  const order = STEPS.map(s => s[0]), at = order.indexOf(P.status);
+  const steps = j.kind === "process" ? `<div class="steps">${STEPS.map(([k, l], i) =>
+    `<div class="step ${i === at ? "on" : i < at ? "done" : ""}"><i>${i < at ? "✓" : i + 1}</i>${l}</div>`).join("")}</div>` : "";
+  const eta = j.started && j.progress > 0.03 ? (Date.now() / 1000 - j.started) * (1 - j.progress) / j.progress : null;
+  const logOpen = box.querySelector("details")?.open;
+  const queued = js.slice(1).map(q =>
+    `<div class="qrow"><b>${esc(q.stage || q.kind || "Queued")}</b><span class="qbadge">queued</span></div>`).join("");
+  box.innerHTML = `<div class="jobcard">${steps}
+    <div class="bar" role="progressbar" aria-valuenow="${Math.round(j.progress * 100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${(j.progress * 100).toFixed(1)}%"></i></div>
+    <div class="jobline"><span class="jobmeta"><b>${esc(j.stage)}</b> <span class="st">· ${(j.progress * 100).toFixed(0)}%${eta ? " · about " + fmt(eta) + " left" : ""}</span></span>
+    <button class="ghost" onclick="cancelJob('${j.id}')">Stop</button></div>
+    ${queued ? `<div class="queue">${queued}</div>` : ""}
+    <details class="log" ${logOpen ? "open" : ""}><summary>Details</summary><pre id="logpre"></pre></details></div>`;
+  api("/api/jobs/" + j.id).then(d => { const pre = $("#logpre"); if (pre) { pre.textContent = d.log.join("\n"); pre.scrollTop = 1e9; } }).catch(() => {});
+}
+async function ideas(n, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await api(`/api/projects/${cur}/clips/${n}/titles`, {method: "POST"});
+    const box = $("#i" + n);
+    box.innerHTML = r.titles.length ? r.titles.map(t => `<button>${esc(t)}</button>`).join("") : `<span class="why">No ideas found</span>`;
+    box.querySelectorAll("button").forEach(b => b.onclick = () => { $("#t" + n).value = b.textContent; });
+  } catch (e) { toast(e.message); }
+  btn.disabled = false; btn.textContent = "Ideas";
+}
+function toggleEd(n) { openEd.has(n) ? openEd.delete(n) : openEd.add(n); $("#ed" + n).classList.toggle("open"); }
+function nud(n, k, d) { const i = $("#" + k + n); i.value = (Math.max(0, parseFloat(i.value) + d)).toFixed(1); }
+async function saveClip(n) {
+  const body = {title: $("#t" + n).value.trim(), start: parseFloat($("#s" + n).value), end: parseFloat($("#e" + n).value)};
+  const c = P.clips.find(c => c.n === n), txt = $("#x" + n).value.trim();
+  if (txt && txt !== (c.text || "").trim()) body.caption_text = txt;
+  if (!(body.end - body.start >= 3)) return toast("A clip has to be at least 3 seconds");
+  try { await api(`/api/projects/${cur}/clips/${n}`, {method: "POST", body: JSON.stringify(body)}); toast("Re-rendering clip " + n); openEd.delete(n); tick(); }
+  catch (e) { toast(e.message, 5000); }
+}
+function copyDesc(n) { const c = P.clips.find(c => c.n === n); navigator.clipboard.writeText(c.description).then(() => toast("Post caption copied")); }
+async function rerenderAll() { await api(`/api/projects/${cur}/rerender_all`, {method: "POST"}); toast("Re-rendering every clip"); tick(); }
+async function retry() { await api(`/api/projects/${cur}/retry`, {method: "POST"}); lastSig = ""; tick(); }
+async function cancelJob(id) { await api(`/api/jobs/${id}/cancel`, {method: "POST"}); toast("Stopping…"); }
+async function delProject() {
+  if (!confirm("Delete this video and all its clips from ClipForge?")) return;
+  try { await api("/api/projects/" + cur, {method: "DELETE"}); go(""); } catch (e) { toast(e.message); }
+}
+
+// ------------------------------------------------------------ settings
+const FIELDS = {
+  "Edit": [
+    ["h", "Captions & text"],
+    ["caption_style", "Caption style", "sel", () => OPTS.caption_styles.map(([v, l]) => [v, l.replace(" - ", " – ")])],
+    ["caption_position", "Caption position", "sel", [["auto","Auto – just below the face"],["top","Top"],["middle","Middle"],["bottom","Bottom"]]],
+    ["hook_style", "Hook title", "sel", [["card","Card – white card with an underline"],["slam","Slam – huge text slams in and shakes"],["type","Type – typed out with a cursor"]]],
+    ["accent", "Active word colour", "color"], ["accent2", "Key word colour", "color"],
+    ["hook_title", "Show hook title", "bool", "The AI's title for the first 3 seconds"],
+    ["h", "Motion graphics (HyperFrames)"],
+    ["motion_graphics", "Stat cards & underlines", "bool", "Spoken numbers count up on screen; key words get a hand-drawn underline"],
+    ["flash", "Impact flash", "bool", "A quick light flash on every zoom"],
+    ["transitions", "Shader transitions", "sel", [["off","Off – plain cuts"],["subtle","Subtle – zoom blur, whip pan, light leak, flash (every ~8s)"],["bold","Bold – all 14 WebGL shaders (every ~5s)"]]],
+    ["transition_style", "Transition", "sel", () => OPTS.transitions],
+    ["look", "Film look", "sel", [["none","None"],["vignette","Vignette"],["grain","Film grain"],["film","Grain + vignette"]]],
+    ["progress_bar", "Progress bar", "bool", "Thin bar at the top - keeps people watching"],
+    ["emojis", "Emojis", "bool", "An emoji pops above key words (money 💰, crazy 🤯…)"],
+    ["watermark", "Watermark", "text", "Your @handle, small at the bottom. Blank = none"],
+    ["h", "Sound"],
+    ["sfx", "Sound effects", "bool", "Whoosh on zooms and the title, pop on emojis"],
+    ["music", "Background music", "bool", "music"],
+    ["music_volume", "Music volume", "range"],
+    ["h", "Cut"],
+    ["clip_count", "Clips per video", "num"],
+    ["clip_length", "Clip length", "sel", [["short","Short 15–35s"],["medium","Medium 25–60s"],["long","Long 45–90s"]]],
+    ["remove_silence", "Cut dead air", "bool", "Pauses longer than half a second"],
+    ["remove_fillers", "Cut um / uh", "bool"],
+    ["punch_in", "Punch-in zooms", "bool", "Zoom in/out on alternate beats"],
+    ["layout", "Two people in one shot", "sel", [["auto","Split screen – one on top, one below"],["fill","Follow the speaker only"]]],
+    ["color_polish", "Colour polish", "bool", "A little contrast, saturation and sharpening"],
+  ],
+  "AI": [
+    ["ai", ""],
+    ["ai_provider", "Use", "sel", [["auto","Auto – OmniRoute, then Ollama"],["omniroute","OmniRoute only"],["ollama","Ollama only"],["off","Off – built-in scorer"]]],
+    ["h", "OmniRoute"],
+    ["omniroute_url", "URL", "text"], ["omniroute_key", "API key", "password", "Only if you turned on REQUIRE_API_KEY"],
+    ["omniroute_model", "Model", "text", "auto = OmniRoute picks, or a combo / model id"],
+    ["h", "Ollama (local)"],
+    ["ollama_url", "URL", "text"], ["ollama_model", "Model", "text", "Blank = best installed (qwen3, llama3.1, gemma3…)"],
+    ["h", "Speech to text"],
+    ["whisper_model", "Whisper model", "sel", [["auto","Auto (turbo on GPU, small on CPU)"],["large-v3-turbo","large-v3-turbo"],["large-v3","large-v3 (slow, best)"],["medium","medium"],["small","small"],["base","base (fastest)"]]],
+    ["whisper_device", "Run on", "sel", [["auto","Auto"],["cuda","NVIDIA GPU"],["cpu","CPU"]]],
+  ],
+  "System": [["doctor", ""]],
+  "Advanced": [
+    ["h", "Rendering"],
+    ["renderer", "Captions renderer", "sel", [["auto","HyperFrames (falls back if it fails)"],["ass","Basic (ffmpeg, fastest)"]]],
+    ["encoder", "Video encoder", "sel", [["auto","Auto (NVENC if you have an NVIDIA GPU)"],["nvenc","NVENC"],["x264","x264 (CPU)"]]],
+    ["hf_browser_path", "Chrome for HyperFrames", "text", "Blank = automatic"],
+    ["h", "Downloading"],
+    ["cookies_browser", "Use cookies from", "sel", [["","None (tries Firefox if YouTube asks)"],["firefox","Firefox"],["chrome","Chrome"],["edge","Edge"],["brave","Brave"]]],
+    ["max_height", "Max quality", "sel", [["720","720p"],["1080","1080p"],["1440","1440p"],["2160","4K"]]],
+  ],
+};
+let tab = "Edit", DOC = null;
+async function loadDoctor() {
+  try { DOC = await api("/api/doctor"); } catch (e) { DOC = {rows: [{name: "Check", ok: false, detail: e.message}]}; }
+  if (tab === "System") drawSettings(true);
+}
+async function fixChrome() {
+  try { await api("/api/doctor/fix-chrome", {method: "POST"}); toast("Downloading Chrome for HyperFrames - takes a minute"); }
+  catch (e) { toast(e.message, 5000); }
+}
+async function openSettings() {
+  S = await api("/api/settings"); $("#modal").classList.add("open"); drawSettings(); loadStatus(true).then(() => tab === "AI" && drawSettings(true));
+}
+function closeSettings() { $("#modal").classList.remove("open"); }
+function readForm() {
+  const patch = {};
+  document.querySelectorAll("#sbody [data-k]").forEach(el => {
+    const k = el.dataset.k;
+    patch[k] = el.type === "checkbox" ? el.checked : (el.type === "number" || el.type === "range") ? +el.value : k === "max_height" ? +el.value : el.value;
+  });
+  return patch;
+}
+function drawSettings(keep) {
+  if (keep) Object.assign(S, readForm());
+  $("#tabs").innerHTML = Object.keys(FIELDS).map(t => `<button class="${t === tab ? "on" : ""}" onclick="Object.assign(S,readForm());tab='${t}';drawSettings()">${t}</button>`).join("");
+  $("#sbody").innerHTML = `<div class="fg">` + FIELDS[tab].map(f => {
+    const [k, l, type, extra] = f;
+    if (k === "h") return `<div class="h">${l}</div>`;
+    if (k === "doctor") {
+      if (!DOC) { loadDoctor(); return `<div class="empty" style="grid-column:1/-1">Checking everything…</div>`; }
+      return `<div style="grid-column:1/-1;display:flex;flex-direction:column;gap:8px">` + DOC.rows.map(r => `
+        <div class="aibox" style="margin:0"><span class="dot ${r.ok ? "ok" : "bad"}"></span><b>${esc(r.name)}</b> — ${esc(r.detail)}
+        ${!r.ok && r.hint ? `<div style="color:var(--mut)">${esc(r.hint)}</div>` : ""}
+        ${r.fix === "chrome" ? `<button class="pri" style="margin-top:6px" onclick="fixChrome()">Download it now</button>` : ""}</div>`).join("")
+        + `<button class="ghost" onclick="DOC=null;drawSettings(true)">Check again</button></div>`;
+    }
+    if (k === "ai") {
+      if (!ST) return "";
+      const a = ST.ai, om = a.omniroute, ol = a.ollama;
+      return `<div class="aibox" style="grid-column:1/-1">
+        <div><span class="dot ${om.ok ? "ok" : "bad"}"></span><b>OmniRoute</b> — ${om.ok ? "running, " + om.models.length + " models" : esc(om.error)}</div>
+        <div><span class="dot ${ol.ok ? "ok" : "bad"}"></span><b>Ollama</b> — ${ol.ok ? (ol.pick ? "running, will use " + esc(ol.pick) : "running but no chat model – run: ollama pull qwen3:8b") : esc(ol.error)}</div>
+        <div style="color:var(--mut)">Picking clips with: <b style="color:var(--text)">${a.provider === "none" ? "the built-in scorer (no AI running)" : esc(a.provider + " · " + a.model)}</b>
+        <button class="ghost" style="padding:3px 10px;margin-left:8px" onclick="loadStatus(true).then(()=>drawSettings(true))">Check again</button></div></div>`;
+    }
+    const v = S[k];
+    let input;
+    if (type === "bool") input = `<label class="sw"><input type="checkbox" data-k="${k}" ${v ? "checked" : ""}><span></span></label>`;
+    else if (type === "sel") input = `<select data-k="${k}">${(typeof extra === "function" ? extra() : extra).map(([ov, ol]) => `<option value="${ov}" ${String(v) === String(ov) ? "selected" : ""}>${ol}</option>`).join("")}</select>`;
+    else if (type === "color") input = `<input type="color" data-k="${k}" value="${esc(v)}" style="width:70px;padding:3px;height:36px">`;
+    else if (type === "range") input = `<input type="range" min="0.03" max="0.4" step="0.01" data-k="${k}" value="${esc(v)}" style="width:200px">`;
+    else if (type === "num") input = `<input type="number" min="1" max="20" data-k="${k}" value="${esc(v)}" style="width:90px">`;
+    else input = `<input type="${type}" data-k="${k}" value="${esc(v)}">`;
+    let hint = type !== "sel" && typeof extra === "string" ? `<small>${esc(extra)}</small>` : "";
+    if (extra === "music") hint = `<small>${ST && ST.music ? ST.music + " track(s) in data\\music" : "Put .mp3 files in data\\music first"} — ducked under the voice.
+      <a href="#" onclick="event.preventDefault();api('/api/music/open',{method:'POST'})">Open music folder</a></small>`;
+    return `<div><label>${l}</label>${hint}</div><div>${input}</div>`;
+  }).join("") + `</div>`;
+}
+async function saveSettings() {
+  Object.assign(S, readForm());
+  S = await api("/api/settings", {method: "POST", body: JSON.stringify(S)});
+  closeSettings(); toast("Saved"); loadStatus(true); if (!cur) home();
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSettings(); });
+
+// ------------------------------------------------------------ poll
+let ticking = false;
+async function tick() {
+  if (ticking) return; ticking = true;
+  try {
+    if (!OPTS.caption_styles.length) {            // the first load raced the server starting up
+      OPTS = await api("/api/options"); if (!cur) home();
+    }
+    await loadStatus();
+    if (cur) await loadProject();
+    const n = ST ? ST.jobs.length : 0;
+    if (n || n !== tick.prev) loadList();
+    tick.prev = n;
+  } finally { ticking = false; }
+}
+(async () => {
+  [S, OPTS] = await Promise.all([api("/api/settings").catch(() => ({})), api("/api/options").catch(() => OPTS)]);
+  await loadStatus();
+  route();
+  setInterval(() => { if (!document.hidden) tick(); }, 1500);
+})();
+</script>
+</body>
+</html>

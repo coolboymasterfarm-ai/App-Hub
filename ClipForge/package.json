@@ -1,0 +1,8 @@
+{
+  "name": "clipforge",
+  "private": true,
+  "description": "HyperFrames, pinned to the version ClipForge was tested with",
+  "dependencies": {
+    "hyperframes": "0.8.35"
+  }
+}

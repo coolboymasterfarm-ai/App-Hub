@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>ClipForge</title>
+<style>*{margin:0;padding:0}html,body{width:100%;height:100%;background:#0b0c0f;color:#8b92a1;font:14px Segoe UI,sans-serif;overflow:hidden}
+iframe{width:100%;height:100%;border:none}#msg{padding:40px}</style></head>
+<body><div id="msg">Starting ClipForge… (first start can take ~20 s)</div>
+<script>
+const URL_ = 'http://127.0.0.1:8765';
+let tries = 0;
+(function wait() {
+  fetch(URL_ + '/api/status', { mode: 'no-cors' }).then(() => {
+    document.body.innerHTML = '<iframe src="' + URL_ + '"></iframe>';
+  }).catch(() => {
+    if (++tries > 90) { document.getElementById('msg').textContent = 'ClipForge did not start. Check the console / run Start.bat in the ClipForge folder.'; return; }
+    setTimeout(wait, 1000);
+  });
+})();
+</script></body></html>

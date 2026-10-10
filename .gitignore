@@ -1,0 +1,20 @@
+# Python
+.venv/
+# Node
+node_modules/
+# Build output
+dist/
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+# Logs
+*.log
+# Data large files
+ClipForge/data/models/
+ClipForge/data/music/
+ClipForge/data/projects/
+# tests output
+ClipForge/tests/output/
+# Any file >50MB (git will reject automatically but list for clarity)
+ClipForge/**/bin/*
