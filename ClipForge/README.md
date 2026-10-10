@@ -68,10 +68,17 @@ After that, you only need Start.bat.
 - **Link or file:** paste a link and click **Make clips**. You can also drag a video onto the box, or paste the full path of a video on your PC.
 - **Before you start:** choose how many clips you want, their length, and the caption style.
 - **While it works:** clips appear as they finish. Each one has a virality score and the AI's reason for picking it.
+- **Watch** a clip: click it to open the player. Use **←/→** to go through the clips. Hovering a clip plays a silent preview.
 - **Edit** a clip to:
   - change its hook title
   - nudge the start or end
   - re-render it
+  - download its subtitles (.srt) or cover image, or delete it
+- **Make your own clip:** open the **Transcript** tab, click the first sentence of the moment you want, then the
+  last one. Preview it, give it a title if you like, and click **Make clip**. It gets the same edit as the AI's picks.
+  Sentences already in a clip are marked.
+- **Sort** clips by best score or by their order in the video. **Copy all captions** copies every post caption at once.
+- **Search** your videos in the sidebar (press **/**). **N** starts a new video.
 - **Caption** copies the post caption with hashtags.
 - **Settings** has the colours, what the edit does, and the AI setup. The AI tab shows whether OmniRoute and Ollama are running.
 - **Output:** clips are saved in `data\projects\<id>\clips\`. The **Open folder** button takes you there.

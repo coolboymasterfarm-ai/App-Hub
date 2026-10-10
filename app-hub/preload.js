@@ -1,11 +1,44 @@
-// Preload script for secure IPC
-const { contextBridge, ipcRenderer } = require('electron');
+// Preload script: the only IPC calls the hub page can make.
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
-contextBridge.exposeInMainWorld('electronAPI', {
-  getApps: () => ipcRenderer.invoke('get-apps'),
-  openApp: (appId) => ipcRenderer.send('open-app', appId),
-  startClipForge: () => ipcRenderer.send('start-clipforge'),
-  onSwitchTab: (callback) => {
-    ipcRenderer.on('switch-tab', (event, tab) => callback(tab));
-  }
+const on = (ch) => (cb) => ipcRenderer.on(ch, (_e, data) => cb(data));
+
+contextBridge.exposeInMainWorld('hub', {
+  // hub
+  info: () => ipcRenderer.invoke('hub:info'),
+  set: (patch) => ipcRenderer.invoke('hub:set', patch),
+  open: (folder) => ipcRenderer.invoke('hub:open', folder),
+  hardware: () => ipcRenderer.invoke('hub:hardware'),
+  onShortcut: on('hub:shortcut'),
+  // pages: the hub page owns the layout and tells the main process where app pages go
+  show: (id) => ipcRenderer.send('page:show', id),
+  rect: (r) => ipcRenderer.send('page:rect', r),
+  cover: (on) => ipcRenderer.send('page:cover', on),
+  // ClipForge
+  cfState: () => ipcRenderer.invoke('cf:state'),
+  cfStart: () => ipcRenderer.send('cf:start'),
+  cfRestart: () => ipcRenderer.send('cf:restart'),
+  onCfState: on('cf:state'),
+  onCfOpen: on('cf:open'),
+  // one-click installs
+  installState: () => ipcRenderer.invoke('install:state'),
+  install: (id) => ipcRenderer.invoke('install:run', id),
+  onInstallLog: on('install:log'),
+  // AI models
+  models: () => ipcRenderer.invoke('models:overview'),
+  download: (kind, id) => ipcRenderer.invoke('models:download', kind, id),
+  deleteModel: (kind, id) => ipcRenderer.invoke('models:delete', kind, id),
+  useModel: (kind, id) => ipcRenderer.invoke('models:use', kind, id),
+  onProgress: on('models:progress'),
+  // the user's apps
+  apps: () => ipcRenderer.invoke('apps:list'),
+  addApp: (name, address) => ipcRenderer.invoke('apps:add', name, address),
+  editApp: (id, name, address) => ipcRenderer.invoke('apps:edit', id, name, address),
+  removeApp: (id) => ipcRenderer.invoke('apps:remove', id),
+  pickFolder: () => ipcRenderer.invoke('apps:pick'),
+  pathForFile: (file) => webUtils.getPathForFile(file), // a folder dropped on the Add app box
+  onAppsChanged: on('apps:changed'),
+  nav: (id, action) => ipcRenderer.send('tab:nav', id, action),
+  closeTab: (id) => ipcRenderer.send('tab:close', id),
+  onTabState: on('tab:state'),
 });

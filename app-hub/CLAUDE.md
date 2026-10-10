@@ -11,14 +11,33 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
 1. A Home tab: shows the user's apps as simple tiles, plus an "Add app" tile.
 2. Add app: a small form - Name + Address (a web address like https://... or a local one like http://localhost:3000,
    or a local .html file). Validate it; show a clear message if it's wrong.
-3. Open app: clicking a tile opens that app in its own tab. Tabs sit in one bar at the top; clicking a tab switches to it;
-   each tab has a close (x). The Home tab can't be closed.
+3. Open app: clicking a tile opens that app in its own tab. Open apps are listed in the sidebar; clicking one switches
+   to it; each has a close (x). Home can't be closed.
 4. Remove app: from the Home tile (with a confirm).
 5. Remembered: the app list is saved and comes back after closing and reopening App Hub.
 
-## NOT in version 1 (do not build, even if it seems small)
-API key manager, accounts/sign-in, app store/catalog, themes, sync, auto-update, installer, running native .exe programs
-inside a tab, drag-to-reorder, notifications. Write any good idea for later in /ideas/app-hub-later.md instead.
+## Version 1.1 - added at Bryce's request
+6. Windows .exe: NSIS installer + portable exe via electron-builder (`build.bat`, or the GitHub Actions workflow).
+   ClipForge ships inside and is copied to %LOCALAPPDATA%\App Hub\ClipForge on first run; setup runs its Install.bat.
+7. AI Models tab: detects the PC's hardware, recommends models for the hub's apps (src/models.js), downloads them
+   (Ollama for chat models, faster-whisper for speech), switches ClipForge to them, deletes them.
+8. Folder apps: Add app accepts a folder with an index.html (Choose folder… or drag and drop); it is copied to
+   userData/apps/ and the copy is deleted when the app is removed.
+9. One-click installs: Home lists apps missing from the PC (INSTALLERS in main.js: Ollama, ClipForge) with Install and
+   Install all. Installers run hidden (no CMD window) and stream their output into the hub.
+
+## Version 1.2 - the redesign (Bryce asked for "everything to the max")
+11. Shell: hidden title bar + Windows' own buttons (titleBarOverlay), sidebar navigation instead of top tabs,
+    window bounds remembered. The hub page owns the layout and sends main.js the rect where app views go.
+12. App tabs: back/forward/reload/open-in-browser in the title bar, favicons, a friendly error page, edit app.
+    Use webContents.canGoBack() etc. - navigationHistory.canGoBack() hangs Electron 31 while a page loads.
+13. Home dashboard (status cards, recent ClipForge videos), Settings page (start with Windows, notifications,
+    restart ClipForge, open folders), keyboard shortcuts via before-input-event, ClipForge finish notifications.
+14. ClipForge: redesigned UI, transcript -> make your own clip, clip player, sort/search/delete, local-only API guard.
+
+## NOT built yet (do not build, even if it seems small)
+API key manager, accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
+.exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.
 
 ## Tech (decided - change only with Bryce's OK)
 - Electron (latest stable) + plain HTML, CSS and JavaScript. No UI framework.
@@ -26,7 +45,7 @@ inside a tab, drag-to-reorder, notifications. Write any good idea for later in /
 - Security: contextIsolation on, nodeIntegration off, sandbox on for app tabs; one small preload script with only the
   IPC calls the hub needs. Apps in tabs never get Node access.
 - Data: one JSON file in Electron's userData folder (app.getPath('userData')). Write safely (temp file, then rename).
-- Tests: pure logic (app list load/save/add/remove, address validation) gets `node --test` tests. UI gets click checks.
+- Tests: pure logic (app list load/save/add/remove, address validation, model recommendations) gets `node --test` tests. UI gets click checks.
 - Run on Bryce's PC: double-click start.bat in the project folder (first run installs Electron, then starts App Hub).
 - Location: C:\Users\bryce\Downloads\starnet\Projects\app-hub. Git: main + one feature branch per ticket. Never merge to main.
 

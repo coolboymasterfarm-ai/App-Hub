@@ -306,6 +306,48 @@ def fix_words(words: List[Dict[str, Any]], start: float, end: float,
     return words[:inside[0]] + out + words[inside[-1] + 1:]
 
 
+def new_clip(pid: str, start: float, end: float, title: str = "") -> Dict[str, Any]:
+    """A clip the user picked by hand (from the transcript), checked but not
+    saved yet - make_clip adds it inside a job."""
+    from .highlights import _title_from
+    p = load(pid)
+    words = json.loads((pdir(pid) / "transcript.json").read_text(encoding="utf-8"))["words"]
+    dur = float((p.get("source") or {}).get("duration") or 1e9)
+    s, e = max(0.0, float(start)), min(dur, float(end))
+    if e - s < 3:
+        raise ValueError("a clip has to be at least 3 seconds long")
+    if e - s > 180:
+        raise ValueError("keep a clip under 3 minutes")
+    text = " ".join(w["w"] for w in words if s <= w["s"] < e)
+    return {"start": round(s, 3), "end": round(e, 3),
+         "title": (title or "").strip()[:80] or _title_from(text) or "My clip", "description": "",
+         "reason": "Picked by you", "score": None, "source": "manual", "text": text,
+         "scores": None, "keywords": [], "emojis": {}, "state": "queued", "file": None, "thumb": None}
+
+
+def make_clip(jid: str, pid: str, clip: Dict[str, Any]) -> Dict[str, Any]:
+    """Job: add a hand-picked clip and render it. Done on the job thread, after
+    any job already running, because a running job saves its own copy of the
+    project when it finishes and would drop a clip added in the meantime."""
+    p = load(pid)
+    n = max((c["n"] for c in p["clips"]), default=0) + 1
+    p["clips"].append({"n": n, **clip})
+    save(p)
+    return rerender(jid, pid, n, {})
+
+
+def delete_clip(pid: str, n: int) -> None:
+    p = load(pid)
+    c = next((c for c in p["clips"] if c["n"] == n), None)
+    if c is None:
+        raise KeyError(n)
+    p["clips"] = [x for x in p["clips"] if x["n"] != n]
+    save(p)
+    for k in _FILES:
+        if c.get(k):
+            (pdir(pid) / c[k]).unlink(missing_ok=True)
+
+
 def recover() -> List[str]:
     """After a restart nothing is running: every project with work left is
     queued again and carries on where it stopped. Returns their ids."""
@@ -343,6 +385,7 @@ def bundle(pid: str) -> Path:
             for key, ext in (("srt", ".srt"), ("cover", " cover.jpg")):
                 if c.get(key) and (d / c[key]).exists():
                     z.write(d / c[key], name + ext)
-            notes.append(f"#{c['n']}  {c['title']}  (score {c['score']})\n{c.get('description', '')}\n")
+            score = "picked by you" if c.get("score") is None else f"score {c['score']}"
+            notes.append(f"#{c['n']}  {c['title']}  ({score})\n{c.get('description', '')}\n")
         z.writestr("captions.txt", "\n".join(notes))
     return out

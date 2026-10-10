@@ -1,35 +1,552 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, WebContentsView, Notification, ipcMain, screen, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const hardware = require('./src/hardware');
+const models = require('./src/models');
+const apps = require('./src/apps');
 
 const PORT = 8765;
-// In the repo, ClipForge sits next to app-hub. Fallback: the old Software Factory location.
-const CF_REPO = path.join(__dirname, '..', 'ClipForge');
-const CF_DIR = fs.existsSync(CF_REPO) ? CF_REPO : path.join(__dirname, '..', '..', 'Software Factory', 'ClipForge');
-const PY = path.join(CF_DIR, '.venv', 'Scripts', 'python.exe');
+const WIN = process.platform === 'win32';
+const CF_URL = `http://127.0.0.1:${PORT}`;
+
+// In the repo, ClipForge sits next to app-hub. In the installed .exe it ships in resources/ and is
+// copied to %LOCALAPPDATA%\App Hub\ClipForge, because setup writes its Python, tools and models
+// next to it (Program Files is read-only, and Roaming is the wrong place for gigabytes).
+const CF_SRC = app.isPackaged ? path.join(process.resourcesPath, 'ClipForge') : path.join(__dirname, '..', 'ClipForge');
+const CF_DIR = app.isPackaged
+  ? path.join(process.env.LOCALAPPDATA || app.getPath('userData'), 'App Hub', 'ClipForge')
+  : CF_SRC;
+const PY = WIN ? path.join(CF_DIR, '.venv', 'Scripts', 'python.exe') : path.join(CF_DIR, '.venv', 'bin', 'python');
+const CF_SETTINGS = path.join(CF_DIR, 'data', 'settings.json');
+const WHISPER_DIR = path.join(CF_DIR, 'data', 'models', 'whisper');
+const OLLAMA = 'http://127.0.0.1:11434';
+const APPS_FILE = () => path.join(app.getPath('userData'), 'apps.json');
+const APPS_DIR = () => path.join(app.getPath('userData'), 'apps'); // folder apps are copied here
+const USER = (f) => path.join(app.getPath('userData'), f);
+
 let server = null;
 let win = null;
+const send = (ch, data) => win && !win.isDestroyed() && win.webContents.send(ch, data);
+
+// ---------------------------------------------------------------- ClipForge
+
+function syncClipForge() {
+  if (!app.isPackaged) return;
+  const mark = path.join(CF_DIR, '.hub-version');
+  if (fs.existsSync(mark) && fs.readFileSync(mark, 'utf8') === app.getVersion()) return;
+  // New hub version: refresh the code. .venv, bin, node_modules and data/ are not in the source, so they stay.
+  fs.cpSync(CF_SRC, CF_DIR, { recursive: true, force: true });
+  fs.writeFileSync(mark, app.getVersion());
+}
+
+const cfReady = () => fs.existsSync(PY);
 
 function startClipForge() {
-  if (server) return;
-  if (!fs.existsSync(PY)) { console.error('ClipForge python not found:', PY); return; }
-  server = spawn(PY, ['-m', 'clipforge', '--port', String(PORT)], { cwd: CF_DIR, stdio: 'inherit', windowsHide: true });
-  server.on('exit', (c) => { console.error('ClipForge server exited', c); server = null; });
+  if (server || !cfReady()) return;
+  // Its output goes to a log file (Settings > Open ClipForge log) - there is no console to show it.
+  const log = fs.openSync(USER('clipforge.log'), 'w');
+  server = spawn(PY, ['-m', 'clipforge', '--port', String(PORT)], { cwd: CF_DIR, stdio: ['ignore', log, log], windowsHide: true });
+  server.on('exit', (c) => { console.error('ClipForge server exited', c); server = null; cfPoll(); });
+  fs.closeSync(log);
+}
+
+function restartClipForge() {
+  if (!server) return startClipForge();
+  server.once('exit', () => startClipForge());
+  server.kill();
+}
+
+// The hub watches ClipForge: its state for the ClipForge page, recent videos for Home,
+// and a desktop notification when a video finishes (or fails).
+let cfLast = { state: 'starting', projects: [] };
+const seen = new Map(); // project id -> last status
+let primed = false;     // the first look only records, so old videos don't all notify at start
+
+async function cfPoll() {
+  let state = 'ready', projects = [];
+  if (!cfReady()) state = 'not-installed';
+  else if (!server) state = 'stopped';
+  else {
+    try { projects = await (await fetch(CF_URL + '/api/projects', { signal: AbortSignal.timeout(3000) })).json(); }
+    catch { state = 'starting'; }
+  }
+  if (state === 'ready') notifyFinished(projects);
+  cfLast = { state, url: CF_URL, projects: projects.slice(0, 12) };
+  send('cf:state', cfLast);
+}
+
+function notifyFinished(projects) {
+  for (const p of projects) {
+    const was = seen.get(p.id);
+    seen.set(p.id, p.status);
+    if (!primed || !was || was === p.status || !['done', 'error'].includes(p.status)) continue;
+    if (!hubSettings().notifications || !Notification.isSupported()) continue;
+    if (win && win.isFocused() && page === 'clipforge') continue; // they're looking at it
+    const n = p.status === 'done'
+      ? new Notification({ title: 'Your clips are ready', body: `${p.title} · ${p.clips} clip${p.clips === 1 ? '' : 's'}` })
+      : new Notification({ title: "ClipForge couldn't finish a video", body: `${p.title}: ${p.error || 'open it to see why'}` });
+    n.on('click', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); send('cf:open', p.id); } });
+    n.show();
+  }
+  primed = true;
+}
+
+// ---------------------------------------------------------------- hub settings
+
+const HUB_DEFAULTS = { notifications: true };
+
+function hubSettings() {
+  try { return { ...HUB_DEFAULTS, ...JSON.parse(fs.readFileSync(USER('hub-settings.json'), 'utf8')) }; }
+  catch { return { ...HUB_DEFAULTS }; }
+}
+
+function hubInfo() {
+  return {
+    version: app.getVersion(), cfDir: CF_DIR, platform: process.platform, settings: hubSettings(),
+    openAtLogin: app.getLoginItemSettings().openAtLogin,
+  };
+}
+
+function setHub(patch) {
+  const s = hubSettings();
+  for (const k of Object.keys(HUB_DEFAULTS)) if (k in patch) s[k] = !!patch[k];
+  apps.save(USER('hub-settings.json'), s);
+  // Start-with-Windows lives in Windows itself, not in our file.
+  if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin });
+  return hubInfo();
+}
+
+// Folders the Settings page may open - by name, so the page can't ask for any path.
+const FOLDERS = {
+  clips: () => path.join(CF_DIR, 'data', 'projects'),
+  music: () => path.join(CF_DIR, 'data', 'music'),
+  hub: () => app.getPath('userData'),
+  log: () => USER('clipforge.log'),
+};
+
+let hwCache = null; // hardware doesn't change while the app runs
+const hwSummary = () => (hwCache = hwCache || hardware.detect(fs.existsSync(CF_DIR) ? CF_DIR : app.getPath('userData')));
+
+// ---------------------------------------------------------------- Ollama
+
+async function ollama(pathname, opts = {}) {
+  return fetch(OLLAMA + pathname, { ...opts, signal: opts.signal || AbortSignal.timeout(4000) });
+}
+
+async function ollamaModels() {
+  try { return ((await (await ollama('/api/tags')).json()).models || []).map((m) => m.name); } catch { return null; }
+}
+
+function ollamaExe() {
+  const local = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Ollama', 'ollama.exe');
+  return WIN && fs.existsSync(local) ? local : 'ollama';
+}
+
+async function startOllama() {
+  if (await ollamaModels()) return;
+  const p = spawn(ollamaExe(), ['serve'], { detached: true, stdio: 'ignore', windowsHide: true });
+  p.on('error', () => {}); // not installed: the Models tab offers to install it
+  p.unref();
+}
+
+// ---------------------------------------------------------------- one-click installs
+
+// Apps the hub can install. Each runs hidden (no console window); its output streams to the hub page.
+const INSTALLERS = {
+  ollama: {
+    name: 'Ollama',
+    note: 'Runs the AI chat models on this PC (free). ClipForge uses it to pick and title clips.',
+    installed: async () => fs.existsSync(ollamaExe()) || !!(await ollamaModels()),
+    cmd: () => ['winget install -e --id Ollama.Ollama --accept-source-agreements --accept-package-agreements --silent', {}],
+    after: startOllama,
+  },
+  clipforge: {
+    name: 'ClipForge',
+    note: 'AI auto-clipper: long video in, short vertical clips out. Installs Python, ffmpeg and its tools (5-15 min).',
+    installed: async () => cfReady(),
+    // CF_SKIP_MODEL: the user picks a chat model that fits their PC in the AI Models tab instead.
+    cmd: () => ['Install.bat', { cwd: CF_DIR, env: { ...process.env, CF_SKIP_MODEL: '1' } }],
+    after: startClipForge,
+  },
+};
+let installing = null;
+
+const installLog = (id, line) => win && win.webContents.send('install:log', { id, line });
+
+async function installState() {
+  return Promise.all(Object.entries(INSTALLERS).map(async ([id, x]) =>
+    ({ id, name: x.name, note: x.note, installed: await x.installed(), installing: installing === id })));
+}
+
+function runInstall(id) {
+  const x = INSTALLERS[id];
+  return new Promise((resolve) => {
+    if (!x) return resolve({ ok: false, error: 'Unknown app.' });
+    if (installing) return resolve({ ok: false, error: `${INSTALLERS[installing].name} is still installing.` });
+    if (!WIN) return resolve({ ok: false, error: 'Installing runs on Windows only.' });
+    installing = id;
+    const [cmd, opts] = x.cmd();
+    const p = spawn('cmd.exe', ['/d', '/c', cmd], { ...opts, windowsHide: true });
+    p.stdin.end(); // answers Install.bat's "pause" so it never waits for a key
+    let buf = '';
+    const onData = (d) => {
+      buf += d;
+      const lines = buf.split(/[\r\n]+/);
+      buf = lines.pop();
+      for (const l of lines) if (l.trim()) installLog(id, l.trim());
+    };
+    p.stdout.on('data', onData);
+    p.stderr.on('data', onData);
+    const done = async (error) => {
+      installing = null;
+      if (buf.trim()) installLog(id, buf.trim());
+      const ok = await x.installed();
+      if (ok) await x.after();
+      resolve(ok ? { ok } : { ok, error: error || `${x.name} did not finish installing. See the log for the reason.` });
+    };
+    p.on('exit', () => done());
+    p.on('error', (e) => done(e.message));
+  });
+}
+
+// ---------------------------------------------------------------- models
+
+const progress = (kind, id, text, pct) => win && win.webContents.send('models:progress', { kind, id, text, pct });
+const ollamaHas = (installed, id) => installed.some((n) => n === id || n === id + ':latest');
+
+function whisperDirs() {
+  try { return fs.readdirSync(WHISPER_DIR); } catch { return []; }
+}
+
+function whisperInstalled(id) {
+  const dir = whisperDirs().find((d) => new RegExp(`faster-whisper-${id.replace(/\./g, '\\.')}(-ct2)?$`).test(d));
+  if (!dir) return false;
+  try { // a finished HF download has snapshots/<hash>/model.bin
+    const snaps = path.join(WHISPER_DIR, dir, 'snapshots');
+    return fs.readdirSync(snaps).some((s) => fs.existsSync(path.join(snaps, s, 'model.bin')));
+  } catch { return false; }
+}
+
+function readSettings() {
+  try { return JSON.parse(fs.readFileSync(CF_SETTINGS, 'utf8')); } catch { return {}; }
+}
+
+function writeSettings(patch) {
+  const cur = { ...readSettings(), ...patch };
+  fs.mkdirSync(path.dirname(CF_SETTINGS), { recursive: true });
+  fs.writeFileSync(CF_SETTINGS + '.tmp', JSON.stringify(cur, null, 2));
+  fs.renameSync(CF_SETTINGS + '.tmp', CF_SETTINGS);
+}
+
+async function overview() {
+  const [hw, installed] = await Promise.all([hwSummary(), ollamaModels()]);
+  const rec = models.recommend(hw);
+  const s = readSettings();
+  for (const m of rec.whisper) { m.installed = whisperInstalled(m.id); m.inUse = s.whisper_model === m.id; }
+  for (const m of rec.chat) {
+    m.installed = !!installed && ollamaHas(installed, m.id);
+    m.inUse = !!s.ollama_model && (s.ollama_model === m.id || s.ollama_model === m.id + ':latest');
+  }
+  return { hw, ...rec, ollama: !!installed, cfReady: cfReady(), whisperAuto: !s.whisper_model || s.whisper_model === 'auto' };
+}
+
+async function pullOllama(id) {
+  const r = await ollama('/api/pull', { method: 'POST', body: JSON.stringify({ model: id, stream: true }), signal: AbortSignal.timeout(6 * 3600e3) });
+  if (!r.ok) throw new Error(`Ollama said ${r.status}`);
+  let buf = '';
+  for await (const chunk of r.body) {
+    buf += Buffer.from(chunk).toString();
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      const ev = JSON.parse(line);
+      if (ev.error) throw new Error(ev.error);
+      progress('ollama', id, ev.status, ev.total ? ev.completed / ev.total : null);
+    }
+  }
+}
+
+function pullWhisper(id) {
+  return new Promise((resolve, reject) => {
+    if (!cfReady()) return reject(new Error('Run the ClipForge setup first.'));
+    fs.mkdirSync(WHISPER_DIR, { recursive: true });
+    progress('whisper', id, 'downloading', null);
+    // Same call and folder ClipForge uses (transcribe._load), so it finds the files later.
+    const code = 'import sys; from faster_whisper import download_model; download_model(sys.argv[1], cache_dir=sys.argv[2])';
+    const p = spawn(PY, ['-c', code, id, WHISPER_DIR], { cwd: CF_DIR, windowsHide: true });
+    let err = '';
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', reject);
+    p.on('exit', (c) => (c === 0 ? resolve() : reject(new Error(err.trim().split('\n').pop() || `exit ${c}`))));
+  });
+}
+
+async function download(kind, id) {
+  try {
+    if (kind === 'ollama') {
+      if (!(await ollamaModels())) throw new Error('Ollama is not running. Install or start it first.');
+      await pullOllama(id);
+    } else await pullWhisper(id);
+    progress(kind, id, 'done', 1);
+    return { ok: true };
+  } catch (e) {
+    progress(kind, id, 'failed', null);
+    return { ok: false, error: e.message };
+  }
+}
+
+async function remove(kind, id) {
+  try {
+    if (kind === 'ollama') {
+      const r = await ollama('/api/delete', { method: 'DELETE', body: JSON.stringify({ model: id }) });
+      if (!r.ok) throw new Error(`Ollama said ${r.status}`);
+    } else {
+      for (const d of whisperDirs().filter((d) => d.endsWith('faster-whisper-' + id) || d.endsWith('faster-whisper-' + id + '-ct2'))) {
+        fs.rmSync(path.join(WHISPER_DIR, d), { recursive: true, force: true });
+      }
+    }
+    const s = readSettings();
+    if (kind === 'ollama' && s.ollama_model === id) writeSettings({ ollama_model: '' });
+    if (kind === 'whisper' && s.whisper_model === id) writeSettings({ whisper_model: 'auto' });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+function use(kind, id) {
+  // ClipForge re-reads settings.json on every job, so no restart needed.
+  writeSettings(kind === 'ollama' ? { ollama_model: id, ai_provider: 'auto' } : { whisper_model: id });
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------- pages and app tabs
+
+let page = 'home';      // the page the hub shows: home | clipforge | models | settings | an app id
+let viewRect = null;    // where app pages go, measured by the hub page (it owns the layout)
+let covered = false;    // a hub dialog is open - native views would paint over it
+const views = new Map(); // app id -> WebContentsView
+const failed = new Map(); // app id -> { text, url } of a page that would not load
+
+// Back/forward use webContents.canGoBack() etc., not webContents.navigationHistory: in Electron 31
+// navigationHistory.canGoBack() never returns while a page is still loading, and freezes the app.
+
+function layout() {
+  for (const [id, v] of views) {
+    const show = id === page && !covered && !failed.has(id) && !!viewRect;
+    v.setVisible(show);
+    if (show) v.setBounds(viewRect);
+  }
+}
+
+function tabState(id) {
+  const v = views.get(id);
+  if (!v) return;
+  const wc = v.webContents;
+  send('tab:state', {
+    id, url: wc.getURL(), title: wc.getTitle(), loading: wc.isLoading(), failed: failed.has(id) ? failed.get(id).text : null,
+    canBack: wc.canGoBack(), canForward: wc.canGoForward(),
+  });
+}
+
+function showPage(id) {
+  page = id;
+  if (id && id.startsWith('app-') && !views.has(id)) openView(id);
+  layout();
+  tabState(id);
+}
+
+function openView(id) {
+  const a = apps.load(APPS_FILE()).find((x) => x.id === id);
+  if (!a) return;
+  const v = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  const wc = v.webContents;
+  wc.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  wc.on('did-start-loading', () => { if (failed.delete(id)) layout(); tabState(id); });
+  wc.on('did-stop-loading', () => tabState(id));
+  wc.on('page-title-updated', () => tabState(id));
+  wc.on('did-navigate-in-page', () => tabState(id));
+  wc.on('did-fail-load', (_e, code, desc, url, main) => {
+    if (!main || code === -3) return; // -3: the load was replaced by another one
+    failed.set(id, { text: desc || `Error ${code}`, url });
+    layout();
+    tabState(id);
+  });
+  wc.on('page-favicon-updated', (_e, icons) => {
+    const icon = icons.find((u) => /^https?:/i.test(u));
+    if (icon && icon !== a.icon) {
+      a.icon = icon;
+      const r = tryApps((list) => list.map((x) => (x.id === id ? { ...x, icon } : x)));
+      if (r.ok) send('apps:changed', r.apps);
+    }
+  });
+  hookKeys(wc);
+  win.contentView.addChildView(v);
+  views.set(id, v);
+  wc.loadURL(a.url).catch(() => {}); // failures arrive as did-fail-load
+}
+
+function closeView(id) {
+  const v = views.get(id);
+  if (!v) return;
+  win.contentView.removeChildView(v);
+  v.webContents.close();
+  views.delete(id);
+  failed.delete(id);
+}
+
+function navigate(id, action) {
+  const v = views.get(id);
+  if (!v) return;
+  const wc = v.webContents;
+  const a = apps.load(APPS_FILE()).find((x) => x.id === id);
+  if (action === 'back' && wc.canGoBack()) wc.goBack();
+  else if (action === 'forward' && wc.canGoForward()) wc.goForward();
+  else if (action === 'reload' && failed.has(id)) wc.loadURL(failed.get(id).url).catch(() => {});
+  else if (action === 'reload') wc.reload();
+  else if (action === 'home' && a) wc.loadURL(a.url).catch(() => {});
+  else if (action === 'external' && /^https?:/i.test(wc.getURL() || (a && a.url))) shell.openExternal(wc.getURL() || a.url);
+}
+
+// Keyboard shortcuts work wherever the focus is: the hub page, the ClipForge frame or an app.
+function shortcut(i) {
+  if (i.type !== 'keyDown') return null;
+  const c = i.control || i.meta, k = (i.key || '').toLowerCase();
+  if (c && /^[1-9]$/.test(k)) return 'go:' + k;
+  if (c && k === 'w') return 'close';
+  if ((c && k === 'r') || k === 'f5') return 'reload';
+  if (c && k === ',') return 'settings';
+  if (c && k === 'tab') return i.shift ? 'prev' : 'next';
+  if (i.alt && k === 'arrowleft') return 'back';
+  if (i.alt && k === 'arrowright') return 'forward';
+  return null;
+}
+
+function hookKeys(wc) {
+  wc.on('before-input-event', (e, input) => {
+    const a = shortcut(input);
+    if (a) { e.preventDefault(); send('hub:shortcut', a); }
+  });
+}
+
+// A folder app is copied into the hub, so it keeps working if the original folder moves.
+function resolveAddress(address) {
+  const src = String(address || '').trim().replace(/^"(.*)"$/, '$1');
+  if (!apps.isDir(src)) return address;
+  apps.entryHtml(src); // throws a readable error before anything is copied
+  const dest = path.join(APPS_DIR(), Date.now().toString(36) + '-' + path.basename(src).replace(/[^\w.-]/g, '_'));
+  fs.cpSync(src, dest, { recursive: true, filter: (f) => path.basename(f) !== 'node_modules' && path.basename(f) !== '.git' });
+  return dest;
+}
+
+function addApp(list, name, address) {
+  const src = String(address || '').trim().replace(/^"(.*)"$/, '$1');
+  return apps.add(list, name || (apps.isDir(src) ? path.basename(src) : ''), resolveAddress(address));
+}
+
+// Deletes the hub's own copy of a folder app, never a folder outside it.
+function dropCopy(a) {
+  if (!a || !a.url.startsWith('file:')) return;
+  const dir = path.relative(APPS_DIR(), require('url').fileURLToPath(a.url)).split(path.sep)[0];
+  if (dir && dir !== '..' && !path.isAbsolute(dir)) fs.rmSync(path.join(APPS_DIR(), dir), { recursive: true, force: true });
+}
+
+function removeApp(list, id) {
+  dropCopy(list.find((x) => x.id === id));
+  return apps.remove(list, id);
+}
+
+function editApp(list, id, name, address) {
+  const a = list.find((x) => x.id === id);
+  if (!a) throw new Error('That app is gone.');
+  const same = !String(address || '').trim() || address === a.url;
+  const next = apps.update(list, id, name, same ? a.url : resolveAddress(address));
+  if (!same) { dropCopy(a); closeView(id); }
+  return next;
+}
+
+function tryApps(fn) {
+  try {
+    const list = fn(apps.load(APPS_FILE()));
+    apps.save(APPS_FILE(), list);
+    return { ok: true, apps: list };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+// ---------------------------------------------------------------- window
+
+function savedBounds() {
+  try {
+    const b = JSON.parse(fs.readFileSync(USER('window.json'), 'utf8'));
+    // only if it still lands on a screen (a monitor may have been unplugged)
+    const on = screen.getAllDisplays().some(({ workArea: d }) =>
+      b.x < d.x + d.width - 80 && b.x + b.width > d.x + 80 && b.y >= d.y - 10 && b.y < d.y + d.height - 80);
+    return on && b.width >= 900 && b.height >= 600 ? b : null;
+  } catch { return null; }
 }
 
 function createWindow() {
+  const b = savedBounds();
   win = new BrowserWindow({
-    width: 1280, height: 800, title: 'App Hub',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true },
+    width: 1360, height: 860, ...(b && { x: b.x, y: b.y, width: b.width, height: b.height }),
+    minWidth: 900, minHeight: 600, title: 'App Hub', backgroundColor: '#0a0b0e', show: false,
+    // our own title bar; Windows still draws its minimise/maximise/close buttons on top of it
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#0e1014', symbolColor: '#c9ced8', height: 44 },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true },
   });
+  win.removeMenu();
+  if (b && b.maximized) win.maximize();
+  win.once('ready-to-show', () => win.show());
+  win.on('close', () => {
+    try { apps.save(USER('window.json'), { ...win.getNormalBounds(), maximized: win.isMaximized() }); } catch {}
+  });
+  hookKeys(win.webContents);
   win.loadFile('index.html');
 }
 
-ipcMain.on('start-clipforge', startClipForge);
-ipcMain.on('open-app', (_e, id) => { if (id === 'clipforge') { startClipForge(); win && win.webContents.send('switch-tab', 'clipforge'); } });
-ipcMain.handle('get-apps', () => [{ id: 'clipforge', name: 'ClipForge' }]);
+ipcMain.handle('hub:info', hubInfo);
+ipcMain.handle('hub:set', (_e, patch) => setHub(patch || {}));
+ipcMain.handle('hub:open', (_e, key) => (FOLDERS[key] ? shell.openPath(FOLDERS[key]()) : 'unknown folder'));
+ipcMain.handle('hub:hardware', hwSummary);
+ipcMain.handle('cf:state', () => cfLast);
+ipcMain.on('cf:start', startClipForge);
+ipcMain.on('cf:restart', restartClipForge);
+ipcMain.handle('install:state', installState);
+ipcMain.handle('install:run', (_e, id) => runInstall(id));
+ipcMain.handle('models:overview', overview);
+ipcMain.handle('models:download', (_e, kind, id) => download(kind, id));
+ipcMain.handle('models:delete', (_e, kind, id) => remove(kind, id));
+ipcMain.handle('models:use', (_e, kind, id) => use(kind, id));
+ipcMain.handle('apps:list', () => apps.load(APPS_FILE()));
+ipcMain.handle('apps:add', (_e, name, address) => tryApps((l) => addApp(l, name, address)));
+ipcMain.handle('apps:edit', (_e, id, name, address) => tryApps((l) => editApp(l, id, name, address)));
+ipcMain.handle('apps:remove', (_e, id) => { closeView(id); return tryApps((l) => removeApp(l, id)); });
+ipcMain.handle('apps:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose your app folder (with an index.html)', properties: ['openDirectory'] });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.on('page:show', (_e, id) => showPage(id));
+ipcMain.on('page:rect', (_e, r) => {
+  viewRect = r && { x: Math.round(r.x), y: Math.round(r.y), width: Math.max(0, Math.round(r.width)), height: Math.max(0, Math.round(r.height)) };
+  layout();
+});
+ipcMain.on('page:cover', (_e, on) => { covered = !!on; layout(); });
+ipcMain.on('tab:nav', (_e, id, action) => navigate(id, action));
+ipcMain.on('tab:close', (_e, id) => closeView(id));
 
-app.whenReady().then(() => { startClipForge(); createWindow(); });
+// Opening the .exe again just brings the open window to the front.
+if (!app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+if (WIN) app.setAppUserModelId('com.bryce.apphub'); // notifications show "App Hub", not "electron.app"
+
+app.whenReady().then(() => {
+  try { syncClipForge(); } catch (e) { console.error('Could not copy ClipForge:', e.message); }
+  startOllama();
+  startClipForge();
+  createWindow();
+  cfPoll();
+  setInterval(cfPoll, 3000);
+});
 app.on('before-quit', () => { if (server) server.kill(); });
 app.on('window-all-closed', () => app.quit());
