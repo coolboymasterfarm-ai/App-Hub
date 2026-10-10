@@ -9,8 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import ai, config, doctor, download, edit, hyperframes, jobs, media, pipeline, shaders, styles, transcribe
@@ -19,6 +19,22 @@ app = FastAPI(title="ClipForge")
 config.PROJECTS.mkdir(parents=True, exist_ok=True)
 (config.DATA / "music").mkdir(exist_ok=True)
 app.mount("/files", StaticFiles(directory=str(config.PROJECTS)), name="files")
+
+_LOCAL = re.compile(r"(127\.0\.0\.1|localhost)(:\d+)?")
+
+
+@app.middleware("http")
+async def local_only(request: Request, call_next):
+    """Only this PC's own pages may use the API. A web page elsewhere could
+    otherwise POST here (start jobs, open folders) - browsers send its Origin,
+    and DNS rebinding shows up as a foreign Host."""
+    host = request.headers.get("host", "")
+    origin = request.headers.get("origin", "")
+    bad_origin = origin and origin != "null" and not re.fullmatch(r"https?://" + _LOCAL.pattern, origin)
+    if not _LOCAL.fullmatch(host) or bad_origin:
+        return JSONResponse({"detail": "ClipForge only accepts requests from this PC"}, status_code=403)
+    return await call_next(request)
+
 
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".flv", ".wmv", ".ts", ".mpg", ".mpeg"}
 
@@ -169,6 +185,44 @@ def rerender(pid: str, n: int, patch: Dict[str, Any] = Body(default={})):
         raise HTTPException(404, "no such clip")
     jid = jobs.submit("rerender", pipeline.rerender, pid, n, patch, project=pid)
     return {"job": jid}
+
+
+@app.get("/api/projects/{pid}/transcript")
+def transcript(pid: str):
+    _load(pid)
+    f = pipeline.pdir(pid) / "transcript.json"
+    if not f.exists():
+        raise HTTPException(404, "not transcribed yet")
+    return FileResponse(f, media_type="application/json")
+
+
+@app.post("/api/projects/{pid}/clips")
+def add_clip(pid: str, body: Dict[str, Any] = Body(...)):
+    """Make a clip from a part of the transcript the user picked."""
+    _load(pid)
+    try:
+        start, end = float(body.get("start")), float(body.get("end"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "start and end must be seconds")
+    try:
+        c = pipeline.new_clip(pid, start, end, str(body.get("title") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except OSError:
+        raise HTTPException(404, "not transcribed yet")
+    return {"job": jobs.submit("rerender", pipeline.make_clip, pid, c, project=pid)}
+
+
+@app.delete("/api/projects/{pid}/clips/{n}")
+def delete_clip(pid: str, n: int):
+    _load(pid)
+    if any(j["project"] == pid for j in jobs.active()):
+        raise HTTPException(409, "stop the job first")
+    try:
+        pipeline.delete_clip(pid, n)
+    except KeyError:
+        raise HTTPException(404, "no such clip")
+    return {"ok": True}
 
 
 @app.post("/api/projects/{pid}/clips/{n}/titles")
