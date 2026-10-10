@@ -7,6 +7,9 @@ numpy>=1.26,<3
 
 # speech to text with word timings (GPU if you have one, CPU if not)
 faster-whisper>=1.1.0
+# shortcut: faster-whisper 1.2.1 opens audio with av.open(metadata_errors=...), which PyAV 19 removed
+# ("unexpected keyword argument 'metadata_errors'"); lift this cap once faster-whisper supports PyAV 19
+av>=11,<19
 
 # downloading - [default] brings yt-dlp-ejs, which solves YouTube's JS challenge
 yt-dlp[default]>=2025.10.22
