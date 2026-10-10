@@ -16,8 +16,14 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
 4. Remove app: from the Home tile (with a confirm).
 5. Remembered: the app list is saved and comes back after closing and reopening App Hub.
 
-## NOT in version 1 (do not build, even if it seems small)
-API key manager, accounts/sign-in, app store/catalog, themes, sync, auto-update, installer, running native .exe programs
+## Version 1.1 - added at Bryce's request
+6. Windows .exe: NSIS installer + portable exe via electron-builder (`build.bat`, or the GitHub Actions workflow).
+   ClipForge ships inside and is copied to %LOCALAPPDATA%\App Hub\ClipForge on first run; setup runs its Install.bat.
+7. AI Models tab: detects the PC's hardware, recommends models for the hub's apps (src/models.js), downloads them
+   (Ollama for chat models, faster-whisper for speech), switches ClipForge to them, deletes them.
+
+## NOT built yet (do not build, even if it seems small)
+API key manager, accounts/sign-in, app store/catalog, themes, sync, auto-update, code signing, running native .exe programs
 inside a tab, drag-to-reorder, notifications. Write any good idea for later in /ideas/app-hub-later.md instead.
 
 ## Tech (decided - change only with Bryce's OK)
@@ -26,7 +32,7 @@ inside a tab, drag-to-reorder, notifications. Write any good idea for later in /
 - Security: contextIsolation on, nodeIntegration off, sandbox on for app tabs; one small preload script with only the
   IPC calls the hub needs. Apps in tabs never get Node access.
 - Data: one JSON file in Electron's userData folder (app.getPath('userData')). Write safely (temp file, then rename).
-- Tests: pure logic (app list load/save/add/remove, address validation) gets `node --test` tests. UI gets click checks.
+- Tests: pure logic (app list load/save/add/remove, address validation, model recommendations) gets `node --test` tests. UI gets click checks.
 - Run on Bryce's PC: double-click start.bat in the project folder (first run installs Electron, then starts App Hub).
 - Location: C:\Users\bryce\Downloads\starnet\Projects\app-hub. Git: main + one feature branch per ticket. Never merge to main.
 

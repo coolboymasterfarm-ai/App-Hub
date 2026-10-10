@@ -1,5 +1,17 @@
-# App Hub
+# App Hub (desktop app)
 
-A Windows desktop app where you keep the apps you use in one place. Each app opens in its own tab inside the hub.
+Electron app: the hub window, app tabs, AI Models page, and the Windows installer config.
+See the [main README](../README.md) for downloading the .exe and first-run steps.
 
-Project rules are in CLAUDE.md. Build instructions arrive with the first feature ticket (T-0003).
+| File | Job |
+|---|---|
+| `main.js` | Window, ClipForge/Ollama processes, app tabs (WebContentsView), model downloads, IPC |
+| `preload.js` | The only IPC calls the page can make |
+| `index.html`, `renderer.js` | Hub UI: tabs, Home tiles, Add app, AI Models page |
+| `src/hardware.js` | Detects CPU, RAM, GPUs + VRAM, free disk |
+| `src/models.js` | Model catalog + which models fit this PC (tested) |
+| `src/apps.js` | App list + address validation (tested) |
+| `test/` | `npm test` |
+| `start.bat` / `build.bat` | Run from source / build the .exe on Windows |
+
+To add a model to the recommendations, add a line to `WHISPER` or `CHAT` in `src/models.js`.
