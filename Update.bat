@@ -10,6 +10,13 @@ where git >nul 2>&1 || (echo  [!] Git is missing. Install it from https://git-sc
 where npm >nul 2>&1 || (echo  [!] Node.js is missing. Install the LTS version from https://nodejs.org, then run this again. & pause & exit /b 1)
 
 echo  [1/4] Getting the latest code...
+REM Run on its own (not inside a clone)? Keep a clone of the repo next to this file and use that.
+if not exist ".git" (
+  if not exist "App-Hub\.git" (
+    git clone https://github.com/coolboymasterfarm-ai/App-Hub.git App-Hub || (echo  [!] Could not download the code - see the message above. & pause & exit /b 1)
+  )
+  cd App-Hub
+)
 git pull || (echo  [!] Could not get the latest code - see the message above. & pause & exit /b 1)
 
 echo  [2/4] Building the installer ^(a few minutes the first time^)...
