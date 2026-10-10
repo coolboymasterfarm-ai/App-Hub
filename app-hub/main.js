@@ -53,13 +53,14 @@ function startClipForge() {
 }
 
 // yt-dlp has to keep up with YouTube's changes; an old copy downloads slowly or not at all.
+// It also keeps PyAV below 19, which breaks transcription (see ClipForge/requirements.txt).
 // ClipForge's Python is made by uv (no pip in it), so update through uv - wherever Install.bat found it.
 let updating = false;
 function updateYtDlp(then) {
   const uv = [path.join(CF_DIR, 'bin', WIN ? 'uv.exe' : 'uv'), path.join(os.homedir(), '.local', 'bin', WIN ? 'uv.exe' : 'uv')]
     .find((f) => fs.existsSync(f)) || 'uv';
   updating = true;
-  const p = spawn(uv, ['pip', 'install', '--python', PY, '--upgrade', 'yt-dlp[default]'], { cwd: CF_DIR, windowsHide: true, stdio: 'ignore' });
+  const p = spawn(uv, ['pip', 'install', '--python', PY, '--upgrade', 'yt-dlp[default]', 'av<19'], { cwd: CF_DIR, windowsHide: true, stdio: 'ignore' });
   const timer = setTimeout(() => p.kill(), 90000); // offline or stuck: start ClipForge anyway
   const done = () => { if (!updating) return; updating = false; clearTimeout(timer); then(); };
   p.on('exit', done);
