@@ -19,6 +19,10 @@ run well on it, and downloads them for you.
    - `App-Hub-Portable-<version>.exe` – one file, no install, just double-click.
 3. Tagging a commit `v1.2.3` and pushing the tag also publishes both files on the **Releases** page.
 
+**Update the App Hub you already have:** double-click `Update.bat` in this folder. It pulls the latest code,
+builds a new installer and installs it over your App Hub (needs Git and Node.js LTS). Your apps, videos, models and
+settings are kept.
+
 **Build it on your own Windows PC:** install Node.js LTS, then double-click `app-hub\build.bat`.
 The files land in `app-hub\dist\`.
 

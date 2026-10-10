@@ -34,11 +34,9 @@ const send = (ch, data) => win && !win.isDestroyed() && win.webContents.send(ch,
 
 function syncClipForge() {
   if (!app.isPackaged) return;
-  const mark = path.join(CF_DIR, '.hub-version');
-  if (fs.existsSync(mark) && fs.readFileSync(mark, 'utf8') === app.getVersion()) return;
-  // New hub version: refresh the code. .venv, bin, node_modules and data/ are not in the source, so they stay.
+  // Refresh the code on every start (it's small), so a rebuilt installer at the same version still
+  // brings new ClipForge code. .venv, bin, node_modules and data/ are not in the source, so they stay.
   fs.cpSync(CF_SRC, CF_DIR, { recursive: true, force: true });
-  fs.writeFileSync(mark, app.getVersion());
 }
 
 const cfReady = () => fs.existsSync(PY);
