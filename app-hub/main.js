@@ -1,6 +1,7 @@
 const { app, BrowserWindow, WebContentsView, Notification, ipcMain, screen, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { spawn } = require('child_process');
 const hardware = require('./src/hardware');
 const models = require('./src/models');
@@ -51,6 +52,20 @@ function startClipForge() {
   fs.closeSync(log);
 }
 
+// yt-dlp has to keep up with YouTube's changes; an old copy downloads slowly or not at all.
+// ClipForge's Python is made by uv (no pip in it), so update through uv - wherever Install.bat found it.
+let updating = false;
+function updateYtDlp(then) {
+  const uv = [path.join(CF_DIR, 'bin', WIN ? 'uv.exe' : 'uv'), path.join(os.homedir(), '.local', 'bin', WIN ? 'uv.exe' : 'uv')]
+    .find((f) => fs.existsSync(f)) || 'uv';
+  updating = true;
+  const p = spawn(uv, ['pip', 'install', '--python', PY, '--upgrade', 'yt-dlp[default]'], { cwd: CF_DIR, windowsHide: true, stdio: 'ignore' });
+  const timer = setTimeout(() => p.kill(), 90000); // offline or stuck: start ClipForge anyway
+  const done = () => { if (!updating) return; updating = false; clearTimeout(timer); then(); };
+  p.on('exit', done);
+  p.on('error', done); // no uv: keep the yt-dlp that's there
+}
+
 function restartClipForge() {
   if (!server) return startClipForge();
   server.once('exit', () => startClipForge());
@@ -66,7 +81,7 @@ let primed = false;     // the first look only records, so old videos don't all 
 async function cfPoll() {
   let state = 'ready', projects = [];
   if (!cfReady()) state = 'not-installed';
-  else if (!server) state = 'stopped';
+  else if (!server) state = updating ? 'starting' : 'stopped';
   else {
     try { projects = await (await fetch(CF_URL + '/api/projects', { signal: AbortSignal.timeout(3000) })).json(); }
     catch { state = 'starting'; }
@@ -543,7 +558,7 @@ if (WIN) app.setAppUserModelId('com.bryce.apphub'); // notifications show "App H
 app.whenReady().then(() => {
   try { syncClipForge(); } catch (e) { console.error('Could not copy ClipForge:', e.message); }
   startOllama();
-  startClipForge();
+  if (cfReady()) updateYtDlp(startClipForge);
   createWindow();
   cfPoll();
   setInterval(cfPoll, 3000);
