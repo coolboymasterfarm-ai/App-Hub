@@ -53,3 +53,17 @@ test('folder apps', () => {
   fs.writeFileSync(path.join(dir, 'index.html'), '');
   assert.match(apps.toUrl(dir), /index\.html$/);
 });
+
+test('app update', () => {
+  const list = apps.add([], 'Notes', 'https://example.com');
+  const id = list[0].id;
+  const renamed = apps.update([{ ...list[0], icon: 'https://example.com/f.ico' }], id, ' Docs ', list[0].url);
+  assert.strictEqual(renamed[0].name, 'Docs');
+  assert.strictEqual(renamed[0].icon, 'https://example.com/f.ico');            // same address keeps the icon
+  const moved = apps.update(renamed, id, 'Docs', 'https://other.example');
+  assert.strictEqual(moved[0].url, 'https://other.example/');
+  assert.strictEqual(moved[0].icon, undefined);                               // new address, new icon
+  assert.throws(() => apps.update(list, id, '', 'https://x.com'), /name/);
+  assert.throws(() => apps.update(list, 'nope', 'X', 'https://x.com'), /gone/);
+  assert.throws(() => apps.update(list, id, 'X', 'not a url'), /Use a web address/);
+});

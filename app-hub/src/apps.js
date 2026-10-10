@@ -54,4 +54,15 @@ function add(list, name, address) {
 
 const remove = (list, id) => list.filter((a) => a.id !== id);
 
-module.exports = { toUrl, entryHtml, isDir, load, save, add, remove };
+// Rename an app and/or point it at a new address (same checks as add).
+function update(list, id, name, address) {
+  const n = String(name || '').trim();
+  if (!n) throw new Error('Give the app a name.');
+  if (n.length > 40) throw new Error('Keep the name under 40 characters.');
+  const a = list.find((x) => x.id === id);
+  if (!a) throw new Error('That app is gone.');
+  const url = toUrl(address);
+  return list.map((x) => (x.id === id ? { ...x, name: n, url, ...(url !== a.url && { icon: undefined }) } : x));
+}
+
+module.exports = { toUrl, entryHtml, isDir, load, save, add, remove, update };

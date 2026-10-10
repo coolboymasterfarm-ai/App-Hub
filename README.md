@@ -24,28 +24,42 @@ The files land in `app-hub\dist\`.
 
 ## First run
 
-1. Open App Hub. The Home tab shows **Install apps** with everything not on this PC yet (Ollama, ClipForge).
+1. Open App Hub. **Home** shows a **Finish setting up** card with everything not on this PC yet (Ollama, ClipForge).
    Click **Install all** to install them one by one, or **Install** on just one. It all runs inside App Hub,
    with no CMD window: the latest step shows under each app, and **Show details** has the full log.
-   ClipForge takes 5–15 min (Python, ffmpeg, HyperFrames…). The section disappears when everything is installed.
-2. Open the **AI Models** tab. App Hub shows your CPU, RAM, graphics card (with VRAM) and free disk, and
-   marks every model **Fast (GPU) / Works (CPU) / Slow / Won't fit**. The best fit is tagged **Recommended**.
-3. Click **Download** on the recommended chat model and speech model. Progress shows in the row.
-   When a download finishes, the recommended model is switched on in ClipForge automatically;
-   **Use in ClipForge** switches to any other installed model, **Delete** frees the disk space.
-4. Open the **ClipForge** tab and make clips.
+   ClipForge takes 5–15 min (Python, ffmpeg, HyperFrames…). The card disappears when everything is installed.
+2. Open **AI Models**. App Hub shows your CPU, RAM, graphics card (with VRAM) and free disk, and rates every
+   model **Fast on GPU / Works on CPU / Slow here / Won't fit**. Click **Set up recommended**: it downloads
+   the best chat and speech models for this PC and switches ClipForge to them.
+3. Open **ClipForge** in the sidebar and make clips. You get a Windows notification when a video is done.
 
 ## Features
 
-- **Tabs for your apps:** Home → **Add App**. Give it a name and either a web address, `http://localhost:PORT`,
-  or **your own app folder**: click **Choose folder…** or drag the folder onto the box. The folder needs an
-  `index.html`; App Hub copies it into its own apps folder, so it keeps working even if you move the original.
-  Each app opens in its own tab with a close (×). Remove an app with the × on its tile (this deletes the hub's copy,
-  never your original). The list is remembered.
-- **One-click installs:** apps that aren't on the PC yet get an **Install** button on Home, plus **Install all**.
-- **ClipForge built in:** installed, started and stopped by the hub. No CMD windows.
+**The hub**
+- **Modern desktop window:** custom title bar with the normal Windows buttons, a sidebar for everything
+  (Home, ClipForge, AI Models, your apps, Settings), and the window's size and position remembered.
+- **Home dashboard:** greeting, ClipForge / AI / PC status cards, your recent ClipForge videos (click one to open it),
+  and your apps as tiles.
+- **Your apps:** **Add app** (sidebar **+** or Home) takes a web address, `http://localhost:PORT`, or **your own app
+  folder** (Choose folder… or drag it in; it needs an `index.html`, and App Hub keeps its own copy). Each app opens in
+  its own tab with **back / forward / reload / open in browser** in the title bar, its own icon (the site's favicon),
+  and a friendly error page with **Try again** if it can't load. Edit or remove apps from their tile.
+- **One-click installs:** apps that aren't on the PC yet get **Install** buttons on Home, plus **Install all**.
+- **Settings:** start App Hub with Windows, notifications on/off, restart ClipForge, open the clips / music / log /
+  data folders, and the keyboard shortcuts.
+- **Keyboard shortcuts:** `Ctrl+1…9` pages, `Ctrl+Tab` next page, `Ctrl+R` reload, `Ctrl+W` close app tab,
+  `Alt+←/→` back/forward, `Ctrl+,` settings. They work wherever the focus is, even inside an app.
+
+**ClipForge** (see `ClipForge/README.md`)
+- Built in: installed, started, watched and restarted by the hub. No CMD windows. If it stops, the ClipForge page says
+  so and offers **Restart**.
+- **Notifications** when a video finishes (or fails); clicking one opens that video.
+- New: make your own clips from the **transcript**, a full-size **clip player**, sort, search, delete clips.
+
+**AI models**
 - **Hardware check:** CPU, threads, RAM, every GPU with real VRAM (`nvidia-smi`, or the Windows registry for AMD/Intel), free disk.
-- **Model recommendations:** chat models (Ollama: Qwen3, Llama, Gemma) and speech models (Whisper) rated for your PC.
+- **Model recommendations:** chat models (Ollama: Qwen3, Llama, Gemma) and speech models (Whisper) rated for your PC,
+  with one-click **Set up recommended**.
 - **Model downloads in the app:** chat models through Ollama with live progress; Whisper models into ClipForge's own model folder.
 - **Install Ollama** from Home or the AI Models tab if it's missing (via winget, hidden). Ollama is started with the hub.
 - **Low-disk and won't-fit warnings** before a download starts.
@@ -54,6 +68,7 @@ The files land in `app-hub\dist\`.
 
 - ClipForge, its Python, tools and models: `%LOCALAPPDATA%\App Hub\ClipForge` (kept when you update or reinstall App Hub).
 - Your app list: `%APPDATA%\App Hub\apps.json`. Folder apps: `%APPDATA%\App Hub\apps\`.
+- Hub settings and window position: `%APPDATA%\App Hub\hub-settings.json`, `window.json`. ClipForge's log: `clipforge.log` there too.
 - Clips: `%LOCALAPPDATA%\App Hub\ClipForge\data\projects\<id>\clips\`.
 
 ## Developing
@@ -63,7 +78,13 @@ cd app-hub
 npm install
 npm test        # logic tests (model recommendations, address checks, app list)
 npm start       # runs the hub from source, using ../ClipForge
+
+cd ../ClipForge
+pip install -r requirements.txt pytest httpx
+python -m pytest tests   # ClipForge: editing, clip picking, the API and its local-only guard
 ```
+
+GitHub runs both test suites and builds the .exe on every push.
 
 On Windows, `start.bat` does the same with a double-click. ClipForge on its own still works with `ClipForge\Install.bat` + `Start.bat`.
 

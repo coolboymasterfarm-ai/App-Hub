@@ -5,9 +5,9 @@ See the [main README](../README.md) for downloading the .exe and first-run steps
 
 | File | Job |
 |---|---|
-| `main.js` | Window, ClipForge/Ollama processes, app tabs (WebContentsView), model downloads, IPC |
-| `preload.js` | The only IPC calls the page can make |
-| `index.html`, `renderer.js` | Hub UI: tabs, Home tiles, Add app, AI Models page |
+| `main.js` | Window, ClipForge/Ollama processes and status, notifications, app tabs (WebContentsView), model downloads, shortcuts, IPC |
+| `preload.js` | The only IPC calls the page can make (`window.hub`) |
+| `index.html`, `hub.css`, `renderer.js` | Hub UI: title bar, sidebar, Home, ClipForge, AI Models, Settings, Add/Edit app |
 | `src/hardware.js` | Detects CPU, RAM, GPUs + VRAM, free disk |
 | `src/models.js` | Model catalog + which models fit this PC (tested) |
 | `src/apps.js` | App list + address validation (tested) |
