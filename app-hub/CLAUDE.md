@@ -35,8 +35,15 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     restart ClipForge, open folders), keyboard shortcuts via before-input-event, ClipForge finish notifications.
 14. ClipForge: redesigned UI, transcript -> make your own clip, clip player, sort/search/delete, local-only API guard.
 
+## Version 1.3 - agents (Bryce asked: Starnet agents should use App Hub's apps)
+15. App Hub API (src/agentapi.js): http://127.0.0.1:8770, one key (Settings > Agent access: show, copy, new key) plus a
+    switch per app (ClipForge, AI Models, Your apps). Refuses requests without the key, with an Origin (browsers) or
+    a foreign Host. ClipForge's API is passed through under /v1/clipforge/.
+16. MCP connector (mcp.js, copied to userData on start): agents on this PC get App Hub's apps as tools. Settings has
+    "Copy config" for Starnet's .mcp.json; it runs with App Hub's own Node (ELECTRON_RUN_AS_NODE), no install needed.
+
 ## NOT built yet (do not build, even if it seems small)
-API key manager, accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
+Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
 .exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.
 
 ## Tech (decided - change only with Bryce's OK)

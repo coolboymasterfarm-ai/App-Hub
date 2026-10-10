@@ -494,8 +494,28 @@ $('ollama-btn').onclick = async () => {
 
 // ---------------------------------------------------------------- Settings
 
+let agent = null, keyShown = false;
+function paintAgent(info) {
+  agent = info.agent;
+  $('agent-key').textContent = keyShown ? agent.key : agent.key.slice(0, 8) + '•'.repeat(24);
+  $('agent-show').textContent = keyShown ? 'Hide' : 'Show';
+  $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;
+  for (const b of document.querySelectorAll('[data-agent]')) b.checked = !!info.settings[b.dataset.agent];
+}
+const copyText = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Could not copy'));
+$('agent-show').onclick = () => { keyShown = !keyShown; hub.info().then(paintAgent); };
+$('agent-copy').onclick = () => copyText(agent.key, 'API key copied');
+$('agent-mcp').onclick = () => copyText(JSON.stringify(agent.mcp, null, 2), 'MCP config copied - paste it into .mcp.json');
+$('agent-new').onclick = async () => {
+  if (!confirm('Make a new key? Agents using the old key stop working until you give them the new one.')) return;
+  paintAgent(await hub.set({ newAgentKey: true }));
+  toast('New key made');
+};
+document.querySelectorAll('[data-agent]').forEach((b) => { b.onchange = () => hub.set({ [b.dataset.agent]: b.checked }); });
+
 async function loadSettings() {
   const info = await hub.info();
+  paintAgent(info);
   $('set-login').checked = info.openAtLogin;
   $('set-notify').checked = info.settings.notifications;
   $('set-where').textContent = `ClipForge, its tools and models live in ${info.cfDir}`;

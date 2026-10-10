@@ -219,6 +219,8 @@ label.srow { cursor: pointer; }
 .keys > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
 .keys > div:first-child { border-top: none; }
 #about { margin-top: 20px; }
+.mono { font-family: Consolas, ui-monospace, monospace; font-size: 12px; word-break: break-all; }
+.set > p.muted { margin-bottom: 4px; }
 
 /* ---------------------------------------------------------------- dialog + toast */
 dialog { margin: auto; background: var(--panel); color: var(--text); border: 1px solid var(--line2); border-radius: 18px; padding: 24px; width: min(480px, 92vw); box-shadow: 0 30px 90px rgba(0, 0, 0, .6); }

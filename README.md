@@ -68,6 +68,21 @@ The files land in `app-hub\dist\`.
 - **Install Ollama** from Home or the AI Models tab if it's missing (via winget, hidden). Ollama is started with the hub.
 - **Low-disk and won't-fit warnings** before a download starts.
 
+## Let your agents use App Hub (Starnet, Claude Code)
+
+App Hub runs a small API on your PC that AI agents can use: make clips from a link, check progress, read transcripts,
+make and edit clips, pick HyperFrames caption styles and transitions, see and download AI models, and list your apps.
+Only programs on your PC can reach it, and they need your key.
+
+1. In App Hub, open **Settings → Agent access**. Switch off anything agents shouldn't use.
+2. Click **Copy config**, then paste it into a file named `.mcp.json` in your Starnet folder. If that file already
+   exists, add the `app-hub` entry to its `mcpServers`.
+3. Restart Claude Code in that folder. Your agents now have App Hub tools (`clipforge_make_clips`,
+   `clipforge_get_video`, `clipforge_set_settings`, `models_overview`, …). App Hub must be open while they work.
+
+**New key** makes a new key at once; paste the config again after using it. The API is at `http://127.0.0.1:8770`
+for scripts (`Authorization: Bearer <key>`; `GET /v1/status` to start).
+
 ## Where things live (installed .exe)
 
 - ClipForge, its Python, tools and models: `%LOCALAPPDATA%\App Hub\ClipForge` (kept when you update or reinstall App Hub).
