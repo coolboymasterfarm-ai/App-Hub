@@ -50,6 +50,6 @@ jobs:
           name: App-Hub-windows
           path: app-hub/dist/*.exe
       - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: app-hub/dist/*.exe
