@@ -14,12 +14,9 @@ run well on it, and downloads them for you.
 
 **Easiest – from GitHub:**
 1. On GitHub, open the **Actions** tab → **Build App Hub .exe** → the latest green run.
-2. Under **Artifacts**, download **App-Hub-windows** and unzip it. You get four files:
-   - `App-Hub-Setup-<version>.exe` – App Hub installer (Start-menu + desktop shortcut, uninstaller). Recommended.
-   - `App-Hub-Portable-<version>.exe` – App Hub as one file, no install, just double-click.
-   - `ClipForge-Setup-<version>.exe` / `ClipForge-Portable-<version>.exe` – **ClipForge on its own** as a normal
-     desktop app: its own window, Start-menu entry and icon, no CMD window and no browser. It shares its install
-     and AI models with App Hub, so you only set it up once.
+2. Under **Artifacts**, download **App-Hub-windows** and unzip it. You get two files:
+   - `App-Hub-Setup-<version>.exe` – installer (Start-menu + desktop shortcut, uninstaller). Recommended.
+   - `App-Hub-Portable-<version>.exe` – one file, no install, just double-click.
 3. Tagging a commit `v1.2.3` and pushing the tag also publishes both files on the **Releases** page.
 
 **Build it on your own Windows PC:** install Node.js LTS, then double-click `app-hub\build.bat`.
@@ -68,8 +65,7 @@ npm test        # logic tests (model recommendations, address checks, app list)
 npm start       # runs the hub from source, using ../ClipForge
 ```
 
-`npm run start:clipforge` runs the standalone ClipForge window. On Windows, `start.bat` runs App Hub with a double-click.
-The old `ClipForge\Install.bat` + `Start.bat` (CMD window + browser) still work, but `ClipForge.exe` replaces them.
+On Windows, `start.bat` does the same with a double-click. ClipForge on its own still works with `ClipForge\Install.bat` + `Start.bat`.
 
 ## Not in the repo
 

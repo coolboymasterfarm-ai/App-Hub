@@ -25,8 +25,6 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
    userData/apps/ and the copy is deleted when the app is removed.
 9. One-click installs: Home lists apps missing from the PC (INSTALLERS in main.js: Ollama, ClipForge) with Install and
    Install all. Installers run hidden (no CMD window) and stream their output into the hub.
-10. ClipForge.exe: the same app built under the name ClipForge (clipforge.builder.js); main.js sees the name and shows
-    only ClipForge + AI Models. Shares %LOCALAPPDATA%\App Hub\ClipForge with App Hub.
 
 ## NOT built yet (do not build, even if it seems small)
 API key manager, accounts/sign-in, app store/catalog, themes, sync, auto-update, code signing, running native .exe programs

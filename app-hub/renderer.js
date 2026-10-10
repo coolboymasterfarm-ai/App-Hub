@@ -12,13 +12,11 @@ let apps = [];        // the user's own apps
 let open = [];        // ids of user apps with an open tab
 let current = 'home';
 let cfReady = false;
-let cfOnly = false;   // running as ClipForge.exe
 
 // ---------------------------------------------------------------- tabs
 
 function renderTabs() {
-  const fixed = cfOnly ? [['clipforge', 'ClipForge'], ['models', 'AI Models']]
-    : [['home', 'Home'], ['clipforge', 'ClipForge'], ['models', 'AI Models']];
+  const fixed = [['home', 'Home'], ['clipforge', 'ClipForge'], ['models', 'AI Models']];
   const tabs = fixed.map(([id, name]) => el('button', { className: 'tab' + (current === id ? ' active' : ''), textContent: name, onclick: () => show(id) }));
   for (const id of open) {
     const a = apps.find((x) => x.id === id);
@@ -140,7 +138,6 @@ async function install(id) {
   renderInstalls();
   const r = await api.install(id);
   await refreshStatus();
-  if (cfOnly && cfReady && current === 'home') show('clipforge');
   if (current === 'models') loadModels();
   if (!r.ok) alert(r.error);
   return r.ok;
@@ -244,13 +241,8 @@ $('ollama-btn').onclick = async () => {
 // ---------------------------------------------------------------- start
 
 (async () => {
-  cfOnly = (await api.status()).cfOnly;
-  if (cfOnly) {
-    document.body.classList.add('cf-only');
-    document.title = $('brand').textContent = 'ClipForge';
-  }
   apps = await api.apps();
   await refreshStatus();
   renderHome();
-  show(cfOnly ? 'clipforge' : 'home'); // ClipForge falls back to its install screen until it's set up
+  show('home');
 })();

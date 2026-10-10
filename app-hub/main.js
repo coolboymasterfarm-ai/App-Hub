@@ -9,8 +9,6 @@ const apps = require('./src/apps');
 const PORT = 8765;
 const WIN = process.platform === 'win32';
 const HEADER = 56; // px, the hub's tab bar; app tabs fill the rest
-// ClipForge.exe is this same app built under the name ClipForge (clipforge.builder.js): one window, ClipForge only.
-const CF_ONLY = app.getName() === 'ClipForge' || process.argv.includes('--clipforge');
 
 // In the repo, ClipForge sits next to app-hub. In the installed .exe it ships in resources/ and is
 // copied to %LOCALAPPDATA%\App Hub\ClipForge, because setup writes its Python, tools and models
@@ -301,7 +299,7 @@ function tryApps(fn) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1280, height: 800, title: CF_ONLY ? 'ClipForge' : 'App Hub', backgroundColor: '#0f0f0f',
+    width: 1280, height: 800, title: 'App Hub', backgroundColor: '#0f0f0f',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true },
   });
   win.removeMenu();
@@ -311,7 +309,7 @@ function createWindow() {
 
 ipcMain.on('start-clipforge', startClipForge);
 ipcMain.on('open-app', (_e, id) => { if (id === 'clipforge') { startClipForge(); win && win.webContents.send('switch-tab', 'clipforge'); } });
-ipcMain.handle('hub:status', () => ({ cfReady: cfReady(), cfDir: CF_DIR, cfOnly: CF_ONLY }));
+ipcMain.handle('hub:status', () => ({ cfReady: cfReady(), cfDir: CF_DIR }));
 ipcMain.handle('install:state', installState);
 ipcMain.handle('install:run', (_e, id) => runInstall(id));
 ipcMain.handle('models:overview', overview);

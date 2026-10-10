@@ -7,7 +7,6 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     [hidden] { display: none !important; }
-    .cf-only .your-apps { display: none; } /* ClipForge.exe: no app list, just ClipForge */
     body {
       font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f0f; color: #fff;
       height: 100vh; display: flex; flex-direction: column; overflow: hidden;
@@ -97,7 +96,7 @@
 </head>
 <body>
   <header>
-    <h1 id="brand">App Hub</h1>
+    <h1>App Hub</h1>
     <nav id="tabs"></nav>
   </header>
 
@@ -108,13 +107,11 @@
           <h2>Install apps</h2>
           <button class="btn" id="install-all">Install all</button>
         </div>
-        <p class="muted" style="margin-bottom:12px">These aren't on this PC yet. Click Install (or Install all to do them one by one). Everything runs inside this app, with no CMD windows.</p>
+        <p class="muted" style="margin-bottom:12px">These aren't on this PC yet. Click Install (or Install all to do them one by one). Everything runs inside App Hub, with no CMD windows.</p>
         <div id="install-list"></div>
       </section>
-      <div class="your-apps">
-        <h2>Your Apps</h2>
-        <div class="apps-grid" id="apps-grid"></div>
-      </div>
+      <h2>Your Apps</h2>
+      <div class="apps-grid" id="apps-grid"></div>
     </div>
 
     <div id="clipforge-view" class="view">
