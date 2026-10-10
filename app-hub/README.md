@@ -12,6 +12,7 @@ See the [main README](../README.md) for downloading the .exe and first-run steps
 | `src/models.js` | Model catalog + which models fit this PC (tested) |
 | `src/apps.js` | App list + address validation (tested) |
 | `test/` | `npm test` |
-| `start.bat` / `build.bat` | Run from source / build the .exe on Windows |
+| `clipforge.builder.js` | Builds the standalone `ClipForge.exe` from the same code |
+| `start.bat` / `build.bat` | Run from source / build both .exe apps on Windows |
 
 To add a model to the recommendations, add a line to `WHISPER` or `CHAT` in `src/models.js`.

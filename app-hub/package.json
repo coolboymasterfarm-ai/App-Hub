@@ -8,7 +8,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "dist": "electron-builder --win nsis portable --publish never"
+    "dist": "electron-builder --win nsis portable --publish never && electron-builder --config clipforge.builder.js --win nsis portable --publish never",
+    "start:clipforge": "electron . --clipforge"
   },
   "devDependencies": {
     "electron": "^31.0.0",
@@ -17,18 +18,53 @@
   "build": {
     "appId": "com.bryce.apphub",
     "productName": "App Hub",
-    "files": ["main.js", "preload.js", "renderer.js", "index.html", "clipforge-tab.html", "src/**/*"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "clipforge-tab.html",
+      "src/**/*"
+    ],
     "extraResources": [
       {
         "from": "../ClipForge",
         "to": "ClipForge",
-        "filter": ["**/*", "!.venv", "!.venv/**", "!node_modules", "!node_modules/**", "!bin", "!bin/**",
-          "!data/projects/**", "!data/models/**", "!data/music/**", "!data/settings.json", "!tests/**", "!**/__pycache__/**"]
+        "filter": [
+          "**/*",
+          "!.venv",
+          "!.venv/**",
+          "!node_modules",
+          "!node_modules/**",
+          "!bin",
+          "!bin/**",
+          "!data/projects/**",
+          "!data/models/**",
+          "!data/music/**",
+          "!data/settings.json",
+          "!tests/**",
+          "!**/__pycache__/**"
+        ]
       }
     ],
-    "win": { "target": ["nsis", "portable"] },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "artifactName": "App-Hub-Setup-${version}.exe" },
-    "portable": { "artifactName": "App-Hub-Portable-${version}.exe" },
-    "directories": { "output": "dist" }
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "App-Hub-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "App-Hub-Portable-${version}.exe"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "publish": null
   }
 }
