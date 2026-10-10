@@ -12,24 +12,9 @@ This private repository contains two top‑level folders:
    git clone https://github.com/<your‑username>/App-Hub.git
    cd App-Hub
    ```
-2. **Install ClipForge**:
-   ```bash
-   cd ClipForge
-   python -m venv .venv   # create a virtual env
-   .\.venv\Scripts\activate   # Windows activation
-   pip install -r requirements.txt
-   ```
-   Then run the server:
-   ```bash
-   python server.py   # serves on http://localhost:8765
-   ```
-3. **Install App‑Hub**:
-   ```bash
-   cd ..\app‑hub
-   npm install   # installs Electron and deps
-   start.bat      # launches the Electron app
-   ```
-   The **ClipForge** tab will appear automatically and connect to the local server.
+2. **Install ClipForge** (one time, needs internet): double-click `ClipForge\Install.bat` and wait for all 7 steps.
+3. **Run App Hub**: open a terminal in `app-hub`, run `npm install`, then `start.bat`.
+   Click the ClipForge tile or tab. App Hub starts the ClipForge server for you (no separate server step).
 
 ## What is NOT included
 

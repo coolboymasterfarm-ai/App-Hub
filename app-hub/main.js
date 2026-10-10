@@ -4,8 +4,9 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 const PORT = 8765;
-// App Hub lives in Projects\app-hub; the runnable ClipForge copy (has .venv and web\) is in Software Factory.
-const CF_DIR = path.join(__dirname, '..', '..', 'Software Factory', 'ClipForge');
+// In the repo, ClipForge sits next to app-hub. Fallback: the old Software Factory location.
+const CF_REPO = path.join(__dirname, '..', 'ClipForge');
+const CF_DIR = fs.existsSync(CF_REPO) ? CF_REPO : path.join(__dirname, '..', '..', 'Software Factory', 'ClipForge');
 const PY = path.join(CF_DIR, '.venv', 'Scripts', 'python.exe');
 let server = null;
 let win = null;
