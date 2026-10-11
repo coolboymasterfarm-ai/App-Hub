@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import threading
 import time
@@ -19,7 +20,28 @@ class FFmpegError(RuntimeError):
         self.log = log
 
 
+# path -> ((modified time, size), probe result). Every clip of a video probes the same source file.
+_PROBED: Dict[str, tuple] = {}
+
+
 def probe(path: Path | str) -> Dict:
+    try:
+        st = os.stat(path)
+        stamp = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        stamp = None
+    hit = _PROBED.get(str(path))
+    if stamp and hit and hit[0] == stamp:
+        return dict(hit[1])
+    info = _probe(path)
+    if stamp:
+        if len(_PROBED) > 64:
+            _PROBED.clear()
+        _PROBED[str(path)] = (stamp, info)
+    return dict(info)
+
+
+def _probe(path: Path | str) -> Dict:
     r = subprocess.run([config.ffprobe(), "-v", "error", "-print_format", "json",
                         "-show_format", "-show_streams", str(path)],
                        capture_output=True, text=True, creationflags=config.NOWIN)

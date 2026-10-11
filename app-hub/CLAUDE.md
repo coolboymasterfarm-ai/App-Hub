@@ -75,6 +75,13 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     OmniRoute is started in the background when App Hub opens (it takes ~30 s); a slow app is waited for (5 s per
     check, 2 min in all) so a second copy is never started.
 
+## Version 1.8 - speed, cleanup, Telegram, key log, My Apps status (Bryce's list of 11 Oct)
+25. Speed: ClipForge's page redraws only what changed (list, and only the changed clip cards - the rest keep their
+    video element); every <video> is preload="none". pipeline.listing() re-reads only project.json files whose
+    modified time/size changed. Whisper stays loaded between videos (one model at a time), Ollama gets keep_alive,
+    media.probe() is cached per file, and a render's work/ temp folder is deleted however the render ended.
+    App tabs: spellcheck off, dark background while loading.
+
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
 .exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.
