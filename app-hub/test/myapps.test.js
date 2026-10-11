@@ -40,6 +40,7 @@ test('myApps finds the programs and addresses on this PC', () => {
   put(path.join(omni, 'package.json'), JSON.stringify({ bin: { omniroute: 'bin/v2/omniroute.mjs' } }));
   put(path.join(omni, 'bin', 'v2', 'omniroute.mjs'));
   env.PATH = '';
+  env.ProgramFiles = path.join(home, 'Program Files'); // not the test PC's real Node
   assert.match(myApps(env).omniroute.missing, /Node\.js 22/); // OmniRoute there, Node not
   put(path.join(appdata, 'npm', process.platform === 'win32' ? 'node.exe' : 'node'));
   put(path.join(home, '.omniroute', '.env'), 'STORAGE_ENCRYPTION_KEY=x\nPORT=20130\n');
