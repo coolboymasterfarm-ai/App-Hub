@@ -26,6 +26,9 @@ function toast(msg, ms = 2600) {
 
 const PAGES = { home: 'Home', clipforge: 'ClipForge', models: 'AI Models', settings: 'Settings' };
 let apps = [];
+let mine = [];              // My Apps: StarNet, FreeLLMAPI, OmniRoute (ClipForge has its own page)
+const starting = new Set(); // My Apps being started right now
+const tabApp = (id) => mine.find((m) => m.id === id) || apps.find((a) => a.id === id);
 const open = new Set();     // user apps with a live tab
 const tabs = new Map();     // app id -> last tab:state
 let page = null;
@@ -55,10 +58,10 @@ function host(url) {
 
 // ---------------------------------------------------------------- navigation
 
-const order = () => ['home', 'clipforge', 'models', ...apps.map((a) => a.id), 'settings'];
+const order = () => ['home', 'models', 'clipforge', ...mine.map((m) => m.id), ...apps.map((a) => a.id), 'settings'];
 
 function show(id) {
-  if (!PAGES[id] && !apps.some((a) => a.id === id)) id = 'home';
+  if (!PAGES[id] && !tabApp(id)) id = 'home';
   page = id;
   const isApp = !PAGES[id];
   if (isApp) open.add(id);
@@ -72,9 +75,29 @@ function show(id) {
   if (id === 'settings') loadSettings();
   if (id === 'clipforge') paintCf();
   hub.show(id);
+  if (id.startsWith('my-') && !tabs.has(id)) startMine(id); // its view opens once its program answers
   renderSide();
   paintTab();
   sendRect();
+}
+
+// Starts StarNet / FreeLLMAPI / OmniRoute (or finds it running), then opens its page in the tab.
+async function startMine(id) {
+  if (starting.has(id)) return;
+  starting.add(id);
+  tabs.delete(id);
+  paintTab();
+  const r = await hub.startMine(id);
+  starting.delete(id);
+  if (!r.ok) tabs.set(id, { failed: r.error, mine: true });
+  else if (page === id) { tabs.delete(id); hub.show(id); }
+  if (page === id) paintTab();
+  refreshMine();
+}
+async function refreshMine() {
+  mine = await hub.mineState();
+  renderSide();
+  if (page === 'home') renderTiles();
 }
 
 function closeTab(id) {
@@ -95,16 +118,18 @@ window.addEventListener('resize', sendRect);
 document.querySelectorAll('.nav[data-page]').forEach((n) => { n.onclick = () => show(n.dataset.page); });
 
 function renderSide() {
-  const items = apps.map((a) => {
-    const close = el('span', { className: 'mini close', title: 'Close tab (Ctrl+W)', role: 'button', ariaLabel: 'Close ' + a.name }, icon('x'));
-    close.onclick = (e) => { e.stopPropagation(); closeTab(a.id); };
-    const b = el('button', { className: 'nav' + (page === a.id ? ' on' : ''), onclick: () => show(a.id), title: a.url },
-      avatar(a), el('span', { textContent: a.name }),
-      open.has(a.id) && el('i', { className: 'open-dot' }), open.has(a.id) && close);
-    b.dataset.page = a.id;
-    return b;
-  });
+  $('side-mine').replaceChildren(...mine.map((m) => sideItem(m, el('span', { className: 'app-ico mine' }, icon(m.icon)))));
+  const items = apps.map((a) => sideItem(a, avatar(a)));
   $('side-apps').replaceChildren(...(items.length ? items : [el('div', { className: 'side-empty', textContent: 'Add a website or your own app.' })]));
+}
+function sideItem(a, ico) {
+  const close = el('span', { className: 'mini close', title: 'Close tab (Ctrl+W)', role: 'button', ariaLabel: 'Close ' + a.name }, icon('x'));
+  close.onclick = (e) => { e.stopPropagation(); closeTab(a.id); };
+  const b = el('button', { className: 'nav' + (page === a.id ? ' on' : ''), onclick: () => show(a.id), title: a.url || a.note },
+    ico, el('span', { textContent: a.name }),
+    open.has(a.id) && el('i', { className: 'open-dot' }), open.has(a.id) && close);
+  b.dataset.page = a.id;
+  return b;
 }
 
 // ---------------------------------------------------------------- app tabs (title bar + error page)
@@ -113,16 +138,22 @@ hub.onTabState((s) => { tabs.set(s.id, s); if (s.id === page) paintTab(); });
 
 function paintTab() {
   if (PAGES[page]) return;
-  const a = apps.find((x) => x.id === page);
+  const a = tabApp(page);
   const s = tabs.get(page) || {};
+  const wait = starting.has(page);
   $('nav-back').disabled = !s.canBack;
   $('nav-fwd').disabled = !s.canForward;
   $('tb-loading').hidden = !s.loading;
-  $('tb-url-text').textContent = s.url ? s.url.replace(/^file:\/\/\/.*\/apps\/[^/]+\//, 'App folder › ') : (a ? a.url : '');
-  $('app-error').hidden = !s.failed;
-  if (s.failed && a) {
+  $('tb-url-text').textContent = s.url ? s.url.replace(/^file:\/\/\/.*\/apps\/[^/]+\//, 'App folder › ') : (a && a.url) || '';
+  $('app-error').hidden = !s.failed && !wait;
+  $('app-retry').hidden = $('app-edit').hidden = wait;
+  if (page.startsWith('my-')) $('app-edit').hidden = true; // My Apps can't be edited or removed
+  if (wait && a) {
+    $('app-error-title').textContent = `Starting ${a.name}…`;
+    $('app-error-text').textContent = 'The first start can take up to a minute.';
+  } else if (s.failed && a) {
     $('app-error-title').textContent = `${a.name} didn't load`;
-    $('app-error-text').textContent = friendly(s.failed);
+    $('app-error-text').textContent = s.mine ? s.failed : friendly(s.failed);
   }
 }
 // Chromium's load errors, in words people use.
@@ -141,7 +172,8 @@ $('nav-back').onclick = () => hub.nav(page, 'back');
 $('nav-fwd').onclick = () => hub.nav(page, 'forward');
 $('nav-reload').onclick = () => hub.nav(page, 'reload');
 $('nav-ext').onclick = () => hub.nav(page, 'external');
-$('app-retry').onclick = () => hub.nav(page, 'reload');
+// My Apps: start it again (its address can change, e.g. StarNet picks a new port each start).
+$('app-retry').onclick = () => (page.startsWith('my-') ? (hub.closeTab(page), startMine(page)) : hub.nav(page, 'reload'));
 $('app-edit').onclick = () => openDialog(apps.find((a) => a.id === page));
 
 // ---------------------------------------------------------------- keyboard shortcuts (sent from any page by the main process)
@@ -232,6 +264,7 @@ function loadHome() {
   $('today').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   renderTiles();
   paintCfStat();
+  refreshMine();
   refreshInstalls();
   hub.hardware().then((hw) => {
     const gpu = hw.gpus[0];
@@ -264,7 +297,14 @@ function paintCfStat() {
   }));
 }
 
+const MINE_STATUS = (m) => (starting.has(m.id) ? 'Starting…' : m.running ? '● Running' : m.installed ? 'Click to start' : 'Not found on this PC');
 function renderTiles() {
+  const cfTile = el('button', { className: 'tile', onclick: () => show('clipforge') },
+    el('span', { className: 'app-ico cf' }, icon('scissors')),
+    el('div', {}, el('b', { textContent: 'ClipForge' }), el('span', { className: 'host', textContent: 'Long videos into short clips' })));
+  $('mine-tiles').replaceChildren(cfTile, ...mine.map((m) => el('button', { className: 'tile', onclick: () => show(m.id), title: m.note },
+    el('span', { className: 'app-ico mine' }, icon(m.icon)),
+    el('div', {}, el('b', { textContent: m.name }), el('span', { className: 'host', textContent: MINE_STATUS(m) })))));
   const tiles = apps.map((a) => {
     const edit = el('span', { className: 'mini', title: 'Edit', role: 'button', ariaLabel: 'Edit ' + a.name }, icon('edit'));
     edit.onclick = (e) => { e.stopPropagation(); openDialog(a); };
@@ -554,7 +594,7 @@ document.querySelectorAll('[data-open]').forEach((b) => {
 // ---------------------------------------------------------------- start
 
 (async () => {
-  [apps, cf, installs] = await Promise.all([hub.apps(), hub.cfState(), hub.installState()]);
+  [apps, cf, installs, mine] = await Promise.all([hub.apps(), hub.cfState(), hub.installState(), hub.mineState()]);
   renderSide();
   show('home');
 })();

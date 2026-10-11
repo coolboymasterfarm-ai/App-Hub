@@ -9,6 +9,7 @@ const apps = require('./src/apps');
 const agentapi = require('./src/agentapi');
 const starnet = require('./src/starnet');
 const sleep = require('./src/sleep');
+const myapps = require('./src/myapps');
 
 const PORT = 8765;
 const WIN = process.platform === 'win32';
@@ -363,6 +364,52 @@ function use(kind, id) {
   return { ok: true };
 }
 
+// ---------------------------------------------------------------- My Apps (StarNet, FreeLLMAPI, OmniRoute)
+
+// Each has its own program and serves its own page on this PC. App Hub starts the program (hidden where it can)
+// and shows that page in a tab, like any other app. They keep running after App Hub closes - other tools use them.
+const mineUrls = new Map(); // 'my-starnet' etc. -> the address its page is on, once it answered
+const alive = async (url) => { try { await fetch(url, { signal: AbortSignal.timeout(2000) }); return true; } catch { return false; } };
+
+async function mineState() {
+  return Promise.all(Object.entries(myapps.myApps()).map(async ([key, a]) => {
+    const url = a.url();
+    return { id: 'my-' + key, name: a.name, icon: a.icon, note: a.note, installed: !!a.exe, running: !!url && await alive(url) };
+  }));
+}
+
+// StarNet picks a new port each start: a tab still on the old address is closed, and reopens at the new one.
+function setMineUrl(id, url) {
+  if (mineUrls.get(id) !== url) closeView(id);
+  mineUrls.set(id, url);
+  return { ok: true };
+}
+
+const mineStarting = new Map(); // id -> the start already under way, so two clicks start it once
+function startMine(id) {
+  if (!mineStarting.has(id)) mineStarting.set(id, startMineNow(id).finally(() => mineStarting.delete(id)));
+  return mineStarting.get(id);
+}
+async function startMineNow(id) {
+  const a = myapps.myApps()[String(id).replace(/^my-/, '')];
+  if (!a) return { ok: false, error: 'Unknown app.' };
+  let url = a.url();
+  if (url && await alive(url)) return setMineUrl(id, url);
+  if (!a.exe) return { ok: false, error: `${a.name} isn't on this PC. Install it, then click Try again.` };
+  const cmd = /\.cmd$/i.test(a.exe);
+  const p = spawn(cmd ? 'cmd.exe' : a.exe, cmd ? ['/d', '/c', a.exe, ...(a.args || [])] : (a.args || []),
+    { cwd: path.dirname(a.exe), detached: true, stdio: 'ignore', windowsHide: true });
+  let error = null;
+  p.on('error', (e) => { error = e.message; });
+  p.unref();
+  for (let i = 0; i < 90 && !error; i++) { // a cold start of StarNet or OmniRoute can take most of a minute
+    await new Promise((r) => setTimeout(r, 1000));
+    url = a.url();
+    if (url && await alive(url)) return setMineUrl(id, url);
+  }
+  return { ok: false, error: error || `${a.name} didn't answer within 90 seconds. Open it from the Start menu once to see why.` };
+}
+
 // ---------------------------------------------------------------- pages and app tabs
 
 let page = 'home';      // the page the hub shows: home | clipforge | models | settings | an app id
@@ -409,14 +456,17 @@ function showPage(id) {
   if (page && views.has(page)) lastSeen.set(page, Date.now()); // the page being left was seen until now
   page = id;
   lastSeen.set(id, Date.now());
-  if (id && id.startsWith('app-') && !views.has(id)) openView(id);
+  if (id && (id.startsWith('app-') || mineUrls.has(id)) && !views.has(id)) openView(id);
   sleepTabs();
   layout();
   tabState(id);
 }
 
+// A tab's app: one of My Apps (once started) or one the user added.
+const findApp = (id) => (mineUrls.has(id) ? { id, url: mineUrls.get(id) } : apps.load(APPS_FILE()).find((x) => x.id === id));
+
 function openView(id) {
-  const a = apps.load(APPS_FILE()).find((x) => x.id === id);
+  const a = findApp(id);
   if (!a) return;
   const v = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   const wc = v.webContents;
@@ -433,7 +483,7 @@ function openView(id) {
   });
   wc.on('page-favicon-updated', (_e, icons) => {
     const icon = icons.find((u) => /^https?:/i.test(u));
-    if (icon && icon !== a.icon) {
+    if (icon && icon !== a.icon && id.startsWith('app-')) {
       a.icon = icon;
       const r = tryApps((list) => list.map((x) => (x.id === id ? { ...x, icon } : x)));
       if (r.ok) send('apps:changed', r.apps);
@@ -460,7 +510,7 @@ function navigate(id, action) {
   const v = views.get(id);
   if (!v) return;
   const wc = v.webContents;
-  const a = apps.load(APPS_FILE()).find((x) => x.id === id);
+  const a = findApp(id);
   if (action === 'back' && wc.canGoBack()) wc.goBack();
   else if (action === 'forward' && wc.canGoForward()) wc.goForward();
   else if (action === 'reload' && failed.has(id)) wc.loadURL(failed.get(id).url).catch(() => {});
@@ -579,6 +629,8 @@ ipcMain.handle('models:download', (_e, kind, id) => download(kind, id));
 ipcMain.handle('models:delete', (_e, kind, id) => remove(kind, id));
 ipcMain.handle('models:use', (_e, kind, id) => use(kind, id));
 ipcMain.handle('apps:list', () => apps.load(APPS_FILE()));
+ipcMain.handle('mine:state', mineState);
+ipcMain.handle('mine:start', (_e, id) => startMine(id));
 ipcMain.handle('apps:add', (_e, name, address) => tryApps((l) => addApp(l, name, address)));
 ipcMain.handle('apps:edit', (_e, id, name, address) => tryApps((l) => editApp(l, id, name, address)));
 ipcMain.handle('apps:remove', (_e, id) => { closeView(id); return tryApps((l) => removeApp(l, id)); });

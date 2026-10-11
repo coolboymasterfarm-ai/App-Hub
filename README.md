@@ -44,7 +44,11 @@ The files land in `app-hub\dist\`.
   (Home, ClipForge, AI Models, your apps, Settings), and the window's size and position remembered.
 - **Home dashboard:** greeting, ClipForge / AI / PC status cards, your recent ClipForge videos (click one to open it),
   and your apps as tiles.
-- **Your apps:** **Add app** (sidebar **+** or Home) takes a web address, `http://localhost:PORT`, or **your own app
+- **My Apps:** ClipForge, **StarNet**, **FreeLLMAPI** and **OmniRoute** in their own sidebar group and Home row. Click
+  one and App Hub starts that app's own program (or finds it already running) and opens its page in a tab. It looks
+  for them where they are on Bryce's PC: `Downloads\starnet\skynet-desktop.exe`, `Downloads\freellapi\FreeLLMAPI.exe`
+  and the `omniroute` command from npm. The tile says **Running**, **Click to start** or **Not found on this PC**.
+- **Other Apps:** **Add app** (sidebar **+** or Home) takes a web address, `http://localhost:PORT`, or **your own app
   folder** (Choose folder… or drag it in; it needs an `index.html`, and App Hub keeps its own copy). Each app opens in
   its own tab with **back / forward / reload / open in browser** in the title bar, its own icon (the site's favicon),
   and a friendly error page with **Try again** if it can't load. Edit or remove apps from their tile.

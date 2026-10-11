@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld('hub', {
   pickFolder: () => ipcRenderer.invoke('apps:pick'),
   pathForFile: (file) => webUtils.getPathForFile(file), // a folder dropped on the Add app box
   onAppsChanged: on('apps:changed'),
+  // My Apps: StarNet, FreeLLMAPI, OmniRoute
+  mineState: () => ipcRenderer.invoke('mine:state'),
+  startMine: (id) => ipcRenderer.invoke('mine:start', id),
   nav: (id, action) => ipcRenderer.send('tab:nav', id, action),
   closeTab: (id) => ipcRenderer.send('tab:close', id),
   onTabState: on('tab:state'),
