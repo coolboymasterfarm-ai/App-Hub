@@ -172,6 +172,12 @@
               <button class="btn ghost" data-open="log"><svg class="i"><use href="#i-info"/></svg>ClipForge log</button>
               <button class="btn ghost" data-open="hub"><svg class="i"><use href="#i-folder"/></svg>App Hub data</button>
             </div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-trash"/></svg></span>
+              <span class="stext"><b>Free up space</b><span id="clean-text">Deletes finished videos and the clip copies sent to Starnet's agents.</span></span>
+              <select id="clean-days" aria-label="Which videos">
+                <option value="30">Older than 30 days</option><option value="7">Older than 7 days</option>
+                <option value="90">Older than 90 days</option><option value="0">All finished videos</option></select>
+              <button class="btn ghost sm danger" id="clean-go">Delete…</button></div>
             <p class="muted small" id="set-where"></p>
           </div>
           <div class="card set" id="agents">
@@ -184,6 +190,8 @@
               <button class="btn ghost sm" id="agent-show">Show keys</button>
               <button class="btn ghost sm" data-open="starnet" id="agent-open" hidden>Open Starnet</button></div>
             <div id="agent-conns"></div>
+            <details class="calls"><summary>Recent agent calls <span class="muted small" id="calls-n"></span></summary>
+              <div id="agent-calls"></div></details>
             <div class="steps">
               <b>Connect Starnet (one time)</b>
               <ol>
@@ -201,6 +209,25 @@
             <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Tell Starnet when videos finish</b><span>Leaves a note in <span class="mono" id="agent-drop">…</span>. Point a Starnet work line's folder trigger at it.</span></span>
               <button class="btn ghost sm" data-open="drop">Open</button>
               <label class="sw"><input type="checkbox" data-agent="starnetDrop" aria-label="Tell Starnet when videos finish"><i></i></label></div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Telegram message when a video finishes</b>
+              <span id="tg-state">Sent by your Telegram bot (the one Starnet uses works) to your chat.</span></span>
+              <label class="sw"><input type="checkbox" data-agent="telegramOn" aria-label="Telegram message when a video finishes"><i></i></label></div>
+            <div class="tg-form">
+              <input id="tg-token" placeholder="Bot token, e.g. 123456789:AAH… (from @BotFather)" autocomplete="off" spellcheck="false">
+              <input id="tg-chat" placeholder="Your chat ID, e.g. 123456789" autocomplete="off" spellcheck="false">
+              <button class="btn ghost sm" id="tg-save">Save</button>
+              <button class="btn ghost sm" id="tg-test">Send test</button>
+            </div>
+            <p class="muted small">Chat ID: message <span class="mono">@userinfobot</span> on Telegram and it replies with yours. Message your bot once first, or it can't write to you.</p>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Discord message when a video finishes</b>
+              <span id="dc-state">The same message, posted to a Discord channel.</span></span>
+              <label class="sw"><input type="checkbox" data-agent="discordOn" aria-label="Discord message when a video finishes"><i></i></label></div>
+            <div class="tg-form">
+              <input id="dc-hook" placeholder="Webhook address: https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
+              <button class="btn ghost sm" id="dc-save">Save</button>
+              <button class="btn ghost sm" id="dc-test">Send test</button>
+            </div>
+            <p class="muted small">In Discord: the channel → <b>Edit Channel</b> → <b>Integrations</b> → <b>Webhooks</b> → <b>New Webhook</b> → <b>Copy Webhook URL</b>.</p>
             <div class="srow"><span class="sico"><svg class="i"><use href="#i-box"/></svg></span>
               <span class="stext"><b>Claude Code</b><span>Copies the MCP config: one server per app, each with its own key. Paste it into <span class="mono">.mcp.json</span> in your project folder, then restart Claude Code.</span></span>
               <button class="btn ghost sm" id="agent-mcp">Copy config</button></div>

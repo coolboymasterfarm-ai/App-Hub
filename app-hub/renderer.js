@@ -185,6 +185,7 @@ $('app-edit').onclick = () => openDialog(apps.find((a) => a.id === page));
 
 // ---------------------------------------------------------------- keyboard shortcuts (sent from any page by the main process)
 
+hub.onShow((id) => show(id));
 hub.onShortcut((a) => {
   const ids = order();
   if (a.startsWith('go:')) { const id = ids[+a.slice(3) - 1]; if (id) show(id); }
@@ -247,7 +248,7 @@ $('app-form').onsubmit = async (e) => {
   $('app-dialog').close();
   renderSide();
   if (page === 'home') renderTiles();
-  if (added) { toast(`${added.name} added`); show(added.id); }
+  if (added) { toast(`${added.name} added. Agents get its own connector and key in Settings > Starnet & agents.`, 4000); show(added.id); }
   else if (editing && page === editing.id) { tabs.delete(editing.id); show(editing.id); }
 };
 
@@ -558,16 +559,17 @@ $('ollama-btn').onclick = async () => {
 let agent = null, settingsNow = {}, keyShown = false;
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(t).toLocaleString(); };
 const seenText = (a) => a && el('span', { className: 'ok-dot' }, `● Connected: ${a.name}, ${ago(a.at)}`);
-const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''] };
+const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''], myapps: ['bot', ''] };
 const CONN_NOTE = {
   all: 'Every app below in one connector.',
   clipforge: 'Make clips, wait for them, send them to Starnet, transcripts, edits, HyperFrames styles.',
   models: "This PC's hardware and models: download and switch models.",
+  myapps: 'Is StarNet, FreeLLMAPI or OmniRoute running, and on which port (read only).',
   apps: 'The list of apps you added (read only).',
 };
 // One row per connector: its address and key to paste into Starnet, Reset, and (per app) the on/off switch.
 function connRow(c) {
-  const [ico, cls] = CONN_ICON[c.scope];
+  const [ico, cls] = CONN_ICON[c.scope] || ['globe', ''];
   const reset = async () => {
     if (!confirm(`Make a new key for ${c.title}? Agents using the old one stop reaching it until you paste the new key into them ` +
       '(Starnet: CONNECTED SERVICES → that connector → ✎ EDIT → bearer token → SAVE & RECONNECT).')) return;
@@ -579,14 +581,37 @@ function connRow(c) {
     onchange: (e) => hub.set({ [c.sw]: e.target.checked }) }), el('i'));
   return el('div', { className: 'srow' }, el('span', { className: 'sico' + cls }, icon(ico)),
     el('span', { className: 'stext' }, el('b', {}, c.title),
-      el('span', {}, CONN_NOTE[c.scope]),
+      el('span', {}, CONN_NOTE[c.scope] || 'Your app: its address, is it answering, and open it here (info, check, open).'),
       el('span', { className: 'mono' }, `Starnet id ${c.id} · ${c.url}`),
       el('span', { className: 'mono' }, 'Key ' + (keyShown ? c.key : c.key.slice(0, 8) + '•'.repeat(16))),
-      seenText(agent.lastAgent[c.scope])),
+      seenText(agent.lastAgent[c.scope]), keyLife(c)),
+    el('select', { ariaLabel: `${c.title} key expires`, title: 'When this key stops working',
+      onchange: (e) => hub.set({ keyDays: { scope: c.scope, days: +e.target.value } }).then(paintAgent) },
+      ...[[0, 'No expiry'], [7, '7 days'], [30, '30 days'], [90, '90 days'], [365, '1 year']].map(([d, t]) =>
+        el('option', { value: d, textContent: t, selected: d === c.days }))),
     btn('ghost sm', 'Address', () => copyText(c.url, `${c.title} address copied - paste it into the URL box in Starnet`)),
     btn('ghost sm', 'Key', () => copyText(c.key, `${c.title} key copied - paste it into "bearer token" in Starnet`)),
     btn('ghost sm danger', 'Reset', reset), sw);
 }
+// "Last used 5 min ago · expires 10 Nov" (or "expired 1 Oct - press Reset")
+function keyLife(c) {
+  const used = c.lastUsed ? `Last used ${ago(c.lastUsed)}` : 'Not used yet';
+  const date = c.expires && new Date(c.expires).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const gone = c.expires && c.expires <= Date.now();
+  return el('span', { className: gone ? 'bad-text' : '' }, used + (date ? (gone ? ` · expired ${date} - press Reset for a new key` : ` · expires ${date}`) : ''));
+}
+// The last 50 calls agents made: when, who, which key, which tool, and whether it worked.
+function paintCalls() {
+  const calls = agent.calls || [];
+  $('calls-n').textContent = calls.length ? `(${calls.length})` : '(none yet)';
+  const title = (scope) => (agent.connectors.find((c) => c.scope === scope) || {}).title || scope;
+  $('agent-calls').replaceChildren(...calls.map((c) => el('div', { className: 'call' + (c.ok ? '' : ' bad') },
+    el('span', { className: 'muted', textContent: new Date(c.at).toLocaleTimeString() }),
+    el('span', { textContent: c.client }), el('span', { className: 'muted', textContent: title(c.scope) }),
+    el('span', { className: 'mono', textContent: c.tool }),
+    el('span', { textContent: (c.ok ? '✓' : '✗ failed') + (c.ms >= 1000 ? ` · ${Math.round(c.ms / 1000)} s` : '') }))));
+}
+hub.onAgentCall((c) => { if (agent) { agent.calls = [c, ...(agent.calls || [])].slice(0, 50); paintCalls(); } });
 function paintSeen() {
   const last = Object.values(agent.lastAgent).sort((a, b) => b.at - a.at)[0];
   $('agent-seen').replaceChildren(seenText(last)
@@ -597,16 +622,50 @@ function paintAgent(info) {
   settingsNow = info.settings;
   $('agent-show').textContent = keyShown ? 'Hide keys' : 'Show keys';
   $('agent-conns').replaceChildren(...agent.connectors.map(connRow));
+  paintCalls();
   $('agent-drop').textContent = agent.dropDir;
   $('agent-open').hidden = !agent.starnetApp;
   $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;
   for (const b of document.querySelectorAll('[data-agent]')) b.checked = !!info.settings[b.dataset.agent];
+  const tg = info.settings;
+  $('tg-state').textContent = tg.telegramToken && tg.telegramChat ? `Bot ${tg.telegramToken} → chat ${tg.telegramChat}`
+    : 'Sent by your Telegram bot (the one Starnet uses works) to your chat.';
+  $('tg-token').placeholder = tg.telegramToken ? `Saved (${tg.telegramToken}) - paste a new one to change it` : 'Bot token, e.g. 123456789:AAH… (from @BotFather)';
+  if (!$('tg-chat').value) $('tg-chat').value = tg.telegramChat || '';
+  $('dc-state').textContent = tg.discordHook ? `Posts to ${tg.discordHook}` : 'The same message, posted to a Discord channel.';
+  $('dc-hook').placeholder = tg.discordHook ? 'Saved - paste a new webhook address to change it' : 'Webhook address: https://discord.com/api/webhooks/…';
   paintSeen();
 }
 const copyText = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Could not copy'));
 $('agent-show').onclick = () => { keyShown = !keyShown; hub.info().then(paintAgent); };
 $('agent-copytimeout').onclick = () => copyText('600000', 'Copied 600000');
 $('agent-mcp').onclick = () => copyText(JSON.stringify(agent.mcp, null, 2), 'MCP config copied - paste it into .mcp.json');
+$('tg-save').onclick = async () => {
+  const r = await hub.set({ telegram: { token: $('tg-token').value, chat: $('tg-chat').value } });
+  if (r.error) return toast(r.error, 5000);
+  $('tg-token').value = '';
+  paintAgent(r);
+  toast('Telegram saved. Click Send test to check it.');
+};
+$('dc-save').onclick = async () => {
+  const r = await hub.set({ discord: { hook: $('dc-hook').value } });
+  if (r.error) return toast(r.error, 5000);
+  $('dc-hook').value = '';
+  paintAgent(r);
+  toast('Discord saved. Click Send test to check it.');
+};
+$('dc-test').onclick = async () => {
+  $('dc-test').disabled = true;
+  const r = await hub.discordTest();
+  $('dc-test').disabled = false;
+  toast(r.ok ? 'Sent - check Discord' : r.error, r.ok ? 2600 : 6000);
+};
+$('tg-test').onclick = async () => {
+  $('tg-test').disabled = true;
+  const r = await hub.telegramTest();
+  $('tg-test').disabled = false;
+  toast(r.ok ? 'Sent - check Telegram' : r.error, r.ok ? 2600 : 6000);
+};
 document.querySelectorAll('[data-agent]').forEach((b) => { b.onchange = () => hub.set({ [b.dataset.agent]: b.checked }); });
 hub.onAgentSeen((seen) => { if (agent) { agent.lastAgent = seen; hub.info().then(paintAgent); } });
 
@@ -618,6 +677,7 @@ async function loadSettings() {
   $('set-where').textContent = `ClipForge, its tools and models live in ${info.cfDir}`;
   $('about').textContent = `App Hub ${info.version}`;
   paintSetCf();
+  paintClean();
 }
 function paintSetCf() {
   const n = cf.projects.length;
@@ -627,6 +687,24 @@ function paintSetCf() {
 $('set-login').onchange = (e) => hub.set({ openAtLogin: e.target.checked }).then(() => toast(e.target.checked ? 'App Hub will start with Windows' : 'App Hub won\'t start with Windows'));
 $('set-notify').onchange = (e) => hub.set({ notifications: e.target.checked });
 $('set-cf-restart').onclick = () => { hub.cfRestart(); cf.state = 'starting'; paintSetCf(); paintCf(); toast('Restarting ClipForge…'); };
+// Free up space: shows what the choice would free, then deletes after a confirm.
+async function paintClean() {
+  const p = await hub.cleanPlan($('clean-days').value);
+  const what = [p.videos && `${p.videos} video${p.videos === 1 ? '' : 's'}`, p.copies && `${p.copies} Starnet cop${p.copies === 1 ? 'y' : 'ies'}`].filter(Boolean);
+  $('clean-text').textContent = what.length ? `${what.join(' and ')} · frees ${p.size}` : 'Nothing to delete for this choice.';
+  $('clean-go').disabled = !what.length;
+  return p;
+}
+$('clean-days').onchange = paintClean;
+$('clean-go').onclick = async () => {
+  const p = await paintClean();
+  if (!p.videos && !p.copies) return;
+  if (!confirm(`Delete ${$('clean-text').textContent.split(' · ')[0]} and free ${p.size}? This can't be undone.`)) return;
+  const r = await hub.cleanRun($('clean-days').value);
+  toast(`Deleted ${r.deleted} folder${r.deleted === 1 ? '' : 's'}, freed ${r.size}`, 4000);
+  paintClean();
+};
+
 document.querySelectorAll('[data-open]').forEach((b) => {
   b.onclick = async () => { const err = await hub.open(b.dataset.open); if (err) toast(err.includes('exist') ? 'Nothing there yet' : err, 3500); };
 });

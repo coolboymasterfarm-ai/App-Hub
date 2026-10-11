@@ -81,6 +81,25 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     modified time/size changed. Whisper stays loaded between videos (one model at a time), Ollama gets keep_alive,
     media.probe() is cached per file, and a render's work/ temp folder is deleted however the render ended.
     App tabs: spellcheck off, dark background while loading.
+26. Settings > ClipForge > Free up space (src/cleanup.js): finished videos older than 7/30/90 days (or all finished), plus
+    the clip copies in Starnet's workspaces\<agent>\clipforge\<id> (older than that, or whose video goes). Shows how much
+    it frees (a hard-linked file counts only if every link goes), asks to confirm. A video being made is never deleted.
+27. Telegram (src/telegram.js): when a video finishes, a short message ("Clips ready: <title> · N clips. Best: ...") from
+    a bot token + chat ID the user saves in Settings > Starnet & agents (the bot Starnet uses works: App Hub only
+    sends, never reads updates). Token checked before saving, kept in hub-settings.json, shown to the page masked.
+    "Send test" button. Bryce enters the token himself.
+28. Keys (src/keylog.js): each connector key shows "Last used ..." and can expire (No expiry / 7 / 30 / 90 days / 1 year,
+    counted from when the key was made or Reset). An expired key gets a 401 that says how to make a new one.
+    "Recent agent calls": the last 50 calls (time, agent, key, tool or /v1 path, worked or failed, time taken),
+    saved in userData/agent-log.json.
+29. My Apps for agents: its own connector (/mcp/myapps, Starnet id myapps), key and switch. One read-only tool,
+    running (myapps_running in the all-apps connector): installed/running/port/address per app, plus the OpenAI-style
+    API address for FreeLLMAPI and OmniRoute. It never starts or stops them.
+30. Every app the user adds gets its own connector (src/appconnectors.js): /mcp/<app id>, its own key (made when the app
+    is added, deleted when it's removed), a Starnet id from its name, and a Claude Code server. Tools: status, info
+    (name, address), check (is it answering), open (shows it in its App Hub tab). The Other Apps switch covers them.
+31. Discord (src/discord.js), next to Telegram: the same "clips ready" message posted through a channel webhook the user
+    pastes in Settings. Checked before saving (discord.com/api/webhooks/...), shown masked, Send test.
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native

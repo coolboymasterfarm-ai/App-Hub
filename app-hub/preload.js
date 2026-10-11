@@ -7,10 +7,16 @@ contextBridge.exposeInMainWorld('hub', {
   // hub
   info: () => ipcRenderer.invoke('hub:info'),
   set: (patch) => ipcRenderer.invoke('hub:set', patch),
+  telegramTest: () => ipcRenderer.invoke('telegram:test'),
+  discordTest: () => ipcRenderer.invoke('discord:test'),
   open: (folder) => ipcRenderer.invoke('hub:open', folder),
+  cleanPlan: (days) => ipcRenderer.invoke('clean:plan', days),
+  cleanRun: (days) => ipcRenderer.invoke('clean:run', days),
   hardware: () => ipcRenderer.invoke('hub:hardware'),
   onShortcut: on('hub:shortcut'),
+  onShow: on('hub:show'), // an agent asked to open an app
   onAgentSeen: on('agent:seen'),
+  onAgentCall: on('agent:call'),
   // pages: the hub page owns the layout and tells the main process where app pages go
   show: (id) => ipcRenderer.send('page:show', id),
   rect: (r) => ipcRenderer.send('page:rect', r),

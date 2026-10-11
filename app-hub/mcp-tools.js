@@ -10,6 +10,7 @@ const APPS = {
   clipforge: { title: 'ClipForge', prefix: 'clipforge_' },
   models: { title: 'AI Models', prefix: 'models_' },
   apps: { title: 'Other Apps', prefix: 'apps_' },
+  myapps: { title: 'My Apps', prefix: 'myapps_' },
 };
 
 const str = (description) => ({ type: 'string', description });
@@ -27,7 +28,7 @@ const BEST = num('Only the best N clips (default all): in the answer, and in wha
 
 function tools(api) {
   const enc = encodeURIComponent;
-  return [
+  const list = [
     ['app_hub_status', 'Can clips be made right now (ready_to_clip, and what to fix if not), which apps agents may use, ' +
       'videos in progress, version, Starnet folder.', obj({}), READ,
       () => api('GET', '/v1/status')],
@@ -82,10 +83,28 @@ function tools(api) {
     ['models_use', 'Switch ClipForge to an installed model.', obj({ kind: str('ollama or whisper'), id: str('Model id') }, ['kind', 'id']), {},
       (a) => api('POST', '/v1/models/use', a)],
     ['apps_list', "The user's own apps in App Hub (name and address).", obj({}), READ, () => api('GET', '/v1/apps')],
+    ['myapps_running', 'Is StarNet, FreeLLMAPI or OmniRoute running on this PC, on which port, and its address ' +
+      '(FreeLLMAPI and OmniRoute also give their OpenAI-style API address). Read only: it never starts or stops them.',
+      obj({ app: str('Optional: starnet, freellmapi or omniroute (default: all three)') }), READ,
+      (a) => api('GET', '/v1/myapps/status' + (a && a.app ? '?app=' + enc(a.app) : ''))],
   ].map(([name, description, inputSchema, annotations, run]) => ({
     name, description, inputSchema, annotations, run,
     app: Object.keys(APPS).find((a) => name.startsWith(APPS[a].prefix)) || 'hub', // 'hub': app_hub_status, in every connector
   }));
+  list.api = api; // for forUserApp
+  return list;
+}
+
+// The connector of an app the user added (id app-...): status plus what an agent can do with any app.
+function forUserApp(list, id) {
+  const enc = encodeURIComponent(id);
+  const own = [
+    ['info', "This app's name and address.", obj({}), READ, () => list.api('GET', `/v1/${enc}/info`)],
+    ['check', 'Is this app answering right now (its address loads)? Read only.', obj({}), READ, () => list.api('GET', `/v1/${enc}/check`)],
+    ['open', 'Open this app in its App Hub tab and bring App Hub to the front, so the user sees it.', obj({}), {},
+      () => list.api('POST', `/v1/${enc}/open`)],
+  ].map(([name, description, inputSchema, annotations, run]) => ({ name, description, inputSchema, annotations, run, app: id }));
+  return [...list.filter((t) => t.app === 'hub').map((t) => ({ ...t, name: 'status' })), ...own];
 }
 
 // One app's connector: its tools plus status, named without the app's prefix.
@@ -95,7 +114,9 @@ function forApp(list, app) {
 }
 
 // What a connector tells the agent when it connects.
-function instructions(app) {
+function instructions(app, title) {
+  if (title) return `${title}, an app the user added to App Hub on this PC. info gives its address, check says if it ` +
+    'is answering, open shows it to the user in App Hub.';
   if (app === 'clipforge') {
     return 'ClipForge on this PC: AI clips from videos. make_clips with wait_minutes 9 does a whole video in one call - ' +
       'on a schedule, make only that call. If clips cannot be made, status says what to fix.';
@@ -138,4 +159,4 @@ async function rpc(msg, list, { onInit, instructions: text = instructions() } = 
   return fail(-32601, 'Method not found: ' + method);
 }
 
-module.exports = { tools, forApp, instructions, rpc, APPS };
+module.exports = { tools, forApp, forUserApp, instructions, rpc, APPS };
