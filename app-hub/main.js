@@ -748,8 +748,10 @@ ipcMain.handle('models:download', (_e, kind, id) => download(kind, id));
 ipcMain.handle('models:delete', (_e, kind, id) => remove(kind, id));
 ipcMain.handle('models:use', (_e, kind, id) => use(kind, id));
 ipcMain.handle('apps:list', () => apps.load(APPS_FILE()));
-ipcMain.handle('mine:state', mineState);
-ipcMain.handle('mine:start', (_e, id) => startMine(id));
+// The sidebar/Home only list apps that open in a tab (not StarNet).
+const tabbed = (id) => myapps.myApps()[String(id).replace(/^my-/, '')]?.tab !== false;
+ipcMain.handle('mine:state', async () => (await mineState()).filter((m) => tabbed(m.id)));
+ipcMain.handle('mine:start', (_e, id) => (tabbed(id) ? startMine(id) : { ok: false, error: 'StarNet opens in its own window.' }));
 ipcMain.handle('apps:add', (_e, name, address) => { const r = tryApps((l) => addApp(l, name, address)); if (r.ok) syncAppKeys(); return r; });
 ipcMain.handle('apps:edit', (_e, id, name, address) => tryApps((l) => editApp(l, id, name, address)));
 ipcMain.handle('apps:remove', (_e, id) => { closeView(id); const r = tryApps((l) => removeApp(l, id)); if (r.ok) syncAppKeys(); return r; });

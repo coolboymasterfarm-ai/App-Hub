@@ -64,7 +64,9 @@ function myApps(env = process.env) {
   const omniEnv = readText(path.join(home, '.omniroute', '.env'));
   return {
     starnet: {
-      name: 'StarNet', icon: 'bot', note: 'Your AI agent crew: belts, schedules and research.',
+      // no tab: StarNet only works fully in its own window (its keys and provider settings need it). Agents still
+      // see whether it's running (My Apps connector), and StarNet still connects to App Hub's connectors.
+      name: 'StarNet', icon: 'bot', note: 'Your AI agent crew: belts, schedules and research.', tab: false,
       exe: first([path.join(dl, 'starnet', 'skynet-desktop.exe'), path.join(local, 'Programs', 'StarNet', 'skynet-desktop.exe')]),
       shortcuts: shortcuts('StarNet', env),
       url: () => { const p = starnetPort(tail(path.join(appdata, 'ai.skynet.harness', 'startup.log'))); return p ? `http://127.0.0.1:${p}/` : null; },

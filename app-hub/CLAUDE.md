@@ -101,6 +101,10 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
 31. Discord (src/discord.js), next to Telegram: the same "clips ready" message posted through a channel webhook the user
     pastes in Settings. Checked before saving (discord.com/api/webhooks/...), shown masked, Send test.
 
+32. StarNet is no longer a tab in My Apps (Bryce, 11 Oct): in a tab it can't use its keychain, so provider settings such
+    as a custom endpoint don't work there. It stays in myapps.js with tab: false - agents still see it in the My
+    Apps connector, and StarNet still connects to App Hub's connectors. Settings keeps "Open Starnet".
+
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
 .exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.
