@@ -48,7 +48,7 @@ function summary(p, folder, best = 0) {
       file: at(c.file), cover: at(c.cover), subtitles: at(c.srt),
     })),
   };
-  if (!['done', 'error', 'cancelled'].includes(p.status)) s.note = 'Still working. Call clipforge_wait_for_video with this id later.';
+  if (!['done', 'error', 'cancelled'].includes(p.status)) s.note = 'Still working. Call the wait_for_video tool with this id later.';
   return s;
 }
 

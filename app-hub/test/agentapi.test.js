@@ -22,7 +22,7 @@ test('App Hub API: key, local-only, switches, routing', async () => {
   const off = new Set();
   const seen = [];
   const srv = agentapi.start({
-    port: 0, getKey: () => key, allowed: (a) => !off.has(a),
+    port: 0, keys: () => ({ all: key }), allowed: (a) => !off.has(a),
     handlers: {
       status: () => ({ ok: true }),
       clipforge: (m, rest, body) => { seen.push([m, rest, body]); return { status: 201, body: { made: true } }; },
@@ -57,7 +57,7 @@ test('App Hub MCP over HTTP (what Starnet connects to)', async () => {
   const off = new Set();
   const agents = [];
   const srv = agentapi.start({
-    port: 0, getKey: () => key, allowed: (a) => !off.has(a), onAgent: (n) => agents.push(n),
+    port: 0, keys: () => ({ all: key }), allowed: (a) => !off.has(a), onAgent: (n) => agents.push(n),
     handlers: {
       status: () => ({ ok: true }),
       clipforge: (m, rest, body) => (rest === 'run' ? { id: 'v1', status: 'done', got: body } : { status: 503, body: { error: 'ClipForge is stopped' } }),
@@ -90,6 +90,48 @@ test('App Hub MCP over HTTP (what Starnet connects to)', async () => {
     assert.match(offr.body.result.content[0].text, /switched off/);
     assert.strictEqual((await rpc({ jsonrpc: '2.0', id: 6, method: 'nope' })).body.error.code, -32601);
     assert.strictEqual((await call(port, { path: '/mcp', headers })).status, 405);
+  } finally {
+    srv.close();
+  }
+});
+
+test('A key per app: each reaches only its app, and /mcp/<app> serves only its tools', async () => {
+  const all = agentapi.newKey(), cf = agentapi.newKey('clipforge'), md = agentapi.newKey('models');
+  const agents = [];
+  const srv = agentapi.start({
+    port: 0, keys: () => ({ all, clipforge: cf, models: md, apps: agentapi.newKey('apps') }), allowed: () => true,
+    onAgent: (n, scope) => agents.push([n, scope]),
+    handlers: { status: () => ({ ok: true }), clipforge: (m, rest) => ({ cf: rest }), models: () => ({ models: 1 }), apps: () => [] },
+  });
+  await once(srv, 'listening');
+  const port = srv.address().port;
+  const as = (k) => ({ Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' });
+  const rpc = (p, k, msg) => call(port, { method: 'POST', path: p, headers: as(k), body: JSON.stringify({ jsonrpc: '2.0', id: 1, ...msg }) });
+  const names = async (p, k) => (await rpc(p, k, { method: 'tools/list' })).body.result.tools.map((t) => t.name);
+  try {
+    assert.match(cf, /^ahk_cl_[0-9a-f]{48}$/);
+    // plain API: the ClipForge key reaches ClipForge and status, not AI Models
+    assert.strictEqual((await call(port, { path: '/v1/clipforge/projects', headers: as(cf) })).status, 200);
+    assert.strictEqual((await call(port, { path: '/v1/status', headers: as(cf) })).status, 200);
+    const no = await call(port, { path: '/v1/models', headers: as(cf) });
+    assert.deepStrictEqual([no.status, /not for AI Models/.test(no.body.error)], [403, true]);
+    assert.strictEqual((await call(port, { path: '/v1/models', headers: as(all) })).status, 200);
+    // per-app connector: short names, its key or the all-apps key, never another app's key
+    const cfTools = await names('/mcp/clipforge', cf);
+    assert.ok(cfTools.includes('make_clips') && cfTools.includes('status') && !cfTools.some((n) => /^models|^clipforge_/.test(n)), cfTools.join());
+    assert.deepStrictEqual(await names('/mcp/models', md), ['status', 'overview', 'download', 'use']);
+    assert.deepStrictEqual((await names('/mcp/models', all)).length, 4);
+    assert.strictEqual((await rpc('/mcp/models', cf, { method: 'tools/list' })).status, 403);
+    // the all-apps connector with an app key: that app's tools only (prefixed), and calls stay in scope
+    assert.ok((await names('/mcp', cf)).every((n) => n === 'app_hub_status' || n.startsWith('clipforge_')));
+    assert.strictEqual((await names('/mcp', all)).length, 18);
+    const call1 = await rpc('/mcp/clipforge', cf, { method: 'tools/call', params: { name: 'list_videos', arguments: {} } });
+    assert.deepStrictEqual(JSON.parse(call1.body.result.content[0].text), { cf: 'projects' });
+    // who connected, and with which connector
+    await rpc('/mcp/clipforge', cf, { method: 'initialize', params: { clientInfo: { name: 'starnet-harness' } } });
+    const init = await rpc('/mcp/models', all, { method: 'initialize', params: { clientInfo: { name: 'x' } } });
+    assert.match(init.body.result.instructions, /AI Models/);
+    assert.deepStrictEqual(agents, [['starnet-harness', 'clipforge'], ['x', 'models']]);
   } finally {
     srv.close();
   }

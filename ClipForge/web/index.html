@@ -874,6 +874,14 @@ document.addEventListener("keydown", e => {
 
 // ------------------------------------------------------------ poll
 let ticking = false;
+// Inside App Hub this page stays loaded on other pages; the hub says when it's off screen, so it stops polling.
+let parked = false;
+addEventListener('message', (e) => {
+  if (e.source !== parent || !e.data || !('cfHidden' in e.data)) return;
+  parked = !!e.data.cfHidden;
+  if (!parked) tick();
+});
+
 async function tick() {
   if (ticking) return; ticking = true;
   try {
@@ -891,7 +899,7 @@ async function tick() {
   [S, OPTS] = await Promise.all([api("/api/settings").catch(() => ({})), api("/api/options").catch(() => OPTS)]);
   await Promise.all([loadStatus(), loadList()]);
   route();
-  setInterval(() => { if (!document.hidden) tick(); }, 1500);
+  setInterval(() => { if (!document.hidden && !parked) tick(); }, 1500);
 })();
 </script>
 </body>

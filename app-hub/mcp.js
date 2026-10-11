@@ -1,16 +1,20 @@
 // App Hub MCP connector over stdio, for Claude Code / Claude Desktop. (Starnet connects over HTTP
-// instead: http://127.0.0.1:8770/mcp.) It calls the App Hub API on this PC, so App Hub must be running.
-// Settings > Starnet & agents > Claude Code copies the ready-made config (command, args, APP_HUB_KEY).
+// instead: http://127.0.0.1:8770/mcp/<app>.) It calls the App Hub API on this PC, so App Hub must be running.
+// Settings > Starnet & agents > Claude Code copies the ready-made config: one server per app (APP_HUB_APP),
+// each with that app's own key. Without APP_HUB_APP it serves every app with the all-apps key.
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { tools, rpc } = require('./mcp-tools');
+const { tools, forApp, instructions, rpc, APPS } = require('./mcp-tools');
 
 const BASE = process.env.APP_HUB_URL || 'http://127.0.0.1:8770';
+const APP = APPS[process.env.APP_HUB_APP] ? process.env.APP_HUB_APP : null;
 // mcp.js is copied next to hub-settings.json, so a key reset in App Hub needs no config change here.
 function key() {
-  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'hub-settings.json'), 'utf8')).agentKey || process.env.APP_HUB_KEY || ''; }
-  catch { return process.env.APP_HUB_KEY || ''; }
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(__dirname, 'hub-settings.json'), 'utf8'));
+    return (APP ? (s.appKeys || {})[APP] : s.agentKey) || process.env.APP_HUB_KEY || '';
+  } catch { return process.env.APP_HUB_KEY || ''; }
 }
 
 // http.request, not fetch: fetch gives up after 5 silent minutes, and making clips can wait up to 9.5.
@@ -31,7 +35,7 @@ function api(method, p, body) {
   });
 }
 
-const list = tools(api);
+const list = APP ? forApp(tools(api), APP) : tools(api);
 const out = (m) => m && process.stdout.write(JSON.stringify(m) + '\n');
 
 let buf = '';
@@ -44,6 +48,6 @@ process.stdin.on('data', (d) => {
     if (!line) continue;
     let msg;
     try { msg = JSON.parse(line); } catch { out({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }); continue; }
-    rpc(msg, list).then(out);
+    rpc(msg, list, { instructions: instructions(APP) }).then(out);
   }
 });

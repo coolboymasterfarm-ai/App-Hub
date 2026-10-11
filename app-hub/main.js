@@ -40,7 +40,8 @@ function syncClipForge() {
   if (!app.isPackaged) return;
   // Refresh the code on every start (it's small), so a rebuilt installer at the same version still
   // brings new ClipForge code. .venv, bin, node_modules and data/ are not in the source, so they stay.
-  fs.cpSync(CF_SRC, CF_DIR, { recursive: true, force: true });
+  // preserveTimestamps: unchanged files keep their date, so Python doesn't recompile all of ClipForge each start
+  fs.cpSync(CF_SRC, CF_DIR, { recursive: true, force: true, preserveTimestamps: true });
 }
 
 const cfReady = () => fs.existsSync(PY);
@@ -57,22 +58,34 @@ function startClipForge() {
 // yt-dlp has to keep up with YouTube's changes; an old copy downloads slowly or not at all.
 // It also keeps PyAV below 19, which breaks transcription (see ClipForge/requirements.txt).
 // ClipForge's Python is made by uv (no pip in it), so update through uv - wherever Install.bat found it.
+// Checked at most once a day (a stamp file marks the last good check), so ClipForge starts right away otherwise.
 let updating = false;
 function updateYtDlp(then) {
+  const stamp = USER('yt-dlp-checked');
+  try { if (Date.now() - fs.statSync(stamp).mtimeMs < 864e5) return then(); } catch { /* never checked */ }
   const uv = [path.join(CF_DIR, 'bin', WIN ? 'uv.exe' : 'uv'), path.join(os.homedir(), '.local', 'bin', WIN ? 'uv.exe' : 'uv')]
     .find((f) => fs.existsSync(f)) || 'uv';
   updating = true;
   const p = spawn(uv, ['pip', 'install', '--python', PY, '--upgrade', 'yt-dlp[default]', 'av<19'], { cwd: CF_DIR, windowsHide: true, stdio: 'ignore' });
   const timer = setTimeout(() => p.kill(), 90000); // offline or stuck: start ClipForge anyway
   const done = () => { if (!updating) return; updating = false; clearTimeout(timer); then(); };
-  p.on('exit', done);
+  p.on('exit', (code) => {
+    if (code === 0) try { fs.writeFileSync(stamp, ''); } catch { /* checks again next start */ }
+    done();
+  });
   p.on('error', done); // no uv: keep the yt-dlp that's there
 }
+
+// The whole tree: ClipForge's ffmpeg and HyperFrames (node + Chrome) would otherwise keep running on Windows.
+// detached, or Electron's exit would take taskkill down with it.
+const stopServer = () => (WIN
+  ? spawn('taskkill', ['/pid', String(server.pid), '/T', '/F'], { windowsHide: true, detached: true, stdio: 'ignore' }).on('error', () => server && server.kill())
+  : server.kill());
 
 function restartClipForge() {
   if (!server) return startClipForge();
   server.once('exit', () => startClipForge());
-  server.kill();
+  stopServer();
 }
 
 // The hub watches ClipForge: its state for the ClipForge page, recent videos for Home,
@@ -81,17 +94,32 @@ let cfLast = { state: 'starting', projects: [] };
 const seen = new Map(); // project id -> last status
 let primed = false;     // the first look only records, so old videos don't all notify at start
 
+let cfBusy = false, cfMisses = 0, cfTick = 0;
+let cfSent = ''; // what the page last got: it's only sent again when something changed
 async function cfPoll() {
-  let state = 'ready', projects = [];
-  if (!cfReady()) state = 'not-installed';
-  else if (!server) state = updating ? 'starting' : 'stopped';
-  else {
-    try { projects = await (await fetch(CF_URL + '/api/projects', { signal: AbortSignal.timeout(3000) })).json(); }
-    catch { state = 'starting'; }
-  }
-  if (state === 'ready') notifyFinished(projects);
-  cfLast = { state, url: CF_URL, projects: projects.slice(0, 12) };
-  send('cf:state', cfLast);
+  if (cfBusy) return; // a slow answer is still on its way
+  // minimized or hidden: every 15 s instead of 3 (agents' waits read the video files, not this)
+  if (win && !win.isDestroyed() && (win.isMinimized() || !win.isVisible()) && ++cfTick % 5) return;
+  cfBusy = true;
+  try {
+    let state = 'ready', projects = [];
+    if (!cfReady()) state = 'not-installed';
+    else if (!server) state = updating ? 'starting' : 'stopped';
+    else {
+      try {
+        projects = await (await fetch(CF_URL + '/api/projects', { signal: AbortSignal.timeout(3000) })).json();
+        cfMisses = 0;
+      } catch {
+        // busy rendering, not gone: keep the last state through two slow answers, so its page isn't reloaded
+        if (cfLast.state === 'ready' && ++cfMisses < 3) return;
+        state = 'starting';
+      }
+    }
+    if (state === 'ready') notifyFinished(projects);
+    cfLast = { state, url: CF_URL, projects: projects.slice(0, 12) };
+    const j = JSON.stringify(cfLast);
+    if (j !== cfSent) { cfSent = j; send('cf:state', cfLast); }
+  } finally { cfBusy = false; }
 }
 
 function notifyFinished(projects) {
@@ -117,26 +145,48 @@ function notifyFinished(projects) {
 // starnetDrop: leave a note in DROP_DIR when a video finishes, for a Starnet folder trigger
 const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, starnetDrop: false };
 
+// Read once and kept: App Hub is the only writer (every agent request asks for the keys and switches).
+let hubCache = null;
 function hubSettings() {
+  if (hubCache) return { ...hubCache };
   let s;
   try { s = { ...HUB_DEFAULTS, ...JSON.parse(fs.readFileSync(USER('hub-settings.json'), 'utf8')) }; }
   catch { s = { ...HUB_DEFAULTS }; }
-  if (!s.agentKey) { s.agentKey = agentapi.newKey(); apps.save(USER('hub-settings.json'), s); } // first start
-  return s;
+  // agentKey reaches every app; appKeys.<app> only that app. Made on first start (and for apps added later).
+  const missing = !s.agentKey || CONNECTORS.some((c) => c.scope !== 'all' && !(s.appKeys || {})[c.scope]);
+  if (missing) {
+    s.agentKey = s.agentKey || agentapi.newKey();
+    s.appKeys = { ...s.appKeys };
+    for (const c of CONNECTORS) if (c.scope !== 'all' && !s.appKeys[c.scope]) s.appKeys[c.scope] = agentapi.newKey(c.scope);
+    apps.save(USER('hub-settings.json'), s);
+  }
+  hubCache = s;
+  return { ...s };
 }
+const keysOf = (s) => ({ all: s.agentKey, ...s.appKeys });
 
-// What an agent needs to connect: the API address, the key, the Starnet connector address, a ready-made
-// MCP config for Claude Code, and the last agent that connected.
-let lastAgent = null;
-function agentInfo(key) {
+// The connectors agents can add: all apps in one, or one per app with its own key (id: the Starnet connector id).
+const CONNECTORS = [
+  { scope: 'all', title: 'All apps', path: '/mcp', id: 'apphub' },
+  { scope: 'clipforge', title: 'ClipForge', path: '/mcp/clipforge', id: 'clipforge', sw: 'agentClipforge' },
+  { scope: 'models', title: 'AI Models', path: '/mcp/models', id: 'aimodels', sw: 'agentModels' },
+  { scope: 'apps', title: 'Other Apps', path: '/mcp/apps', id: 'otherapps', sw: 'agentApps' },
+];
+
+// What an agent needs to connect: each connector's address and key, a ready-made MCP config for Claude Code
+// (one server per app), and the last agent that connected to each.
+const lastAgent = {}; // scope -> { name, at }
+function agentInfo(s) {
+  const keys = keysOf(s);
+  const base = `http://127.0.0.1:${agentapi.PORT}`;
   return {
-    url: `http://127.0.0.1:${agentapi.PORT}`,
-    mcpUrl: `http://127.0.0.1:${agentapi.PORT}/mcp`,
-    key, lastAgent, starnet: starnet.workspaces(), starnetApp: !!starnet.shortcut(), dropDir: DROP_DIR(),
-    mcp: { mcpServers: { 'app-hub': {
+    url: base, lastAgent, starnet: starnet.workspaces(), starnetApp: !!starnet.shortcut(), dropDir: DROP_DIR(),
+    connectors: CONNECTORS.map((c) => ({ ...c, url: base + c.path, key: keys[c.scope] })),
+    // runs the connector with App Hub's own Node; mcp.js reads the current key, APP_HUB_KEY is the fallback
+    mcp: { mcpServers: Object.fromEntries(CONNECTORS.filter((c) => c.scope !== 'all').map((c) => [c.id, {
       command: process.execPath, args: [USER('mcp.js')],
-      env: { ELECTRON_RUN_AS_NODE: '1', APP_HUB_KEY: key }, // runs the connector with App Hub's own Node
-    } } },
+      env: { ELECTRON_RUN_AS_NODE: '1', APP_HUB_APP: c.scope, APP_HUB_KEY: keys[c.scope] },
+    }])) },
   };
 }
 
@@ -144,15 +194,22 @@ function hubInfo() {
   const settings = hubSettings();
   return {
     version: app.getVersion(), cfDir: CF_DIR, platform: process.platform, settings,
-    openAtLogin: app.getLoginItemSettings().openAtLogin, agent: agentInfo(settings.agentKey),
+    openAtLogin: app.getLoginItemSettings().openAtLogin, agent: agentInfo(settings),
   };
 }
 
 function setHub(patch) {
   const s = hubSettings();
   for (const k of Object.keys(HUB_DEFAULTS)) if (k in patch) s[k] = !!patch[k];
-  if (patch.newAgentKey) { s.agentKey = agentapi.newKey(); lastAgent = null; } // the old key stops working at once
+  // a new key for one connector; the old one stops working at once
+  const reset = CONNECTORS.find((c) => c.scope === patch.resetKey);
+  if (reset) {
+    if (reset.scope === 'all') s.agentKey = agentapi.newKey();
+    else s.appKeys = { ...s.appKeys, [reset.scope]: agentapi.newKey(reset.scope) };
+    delete lastAgent[reset.scope];
+  }
   apps.save(USER('hub-settings.json'), s);
+  hubCache = s;
   // Start-with-Windows lives in Windows itself, not in our file.
   if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin });
   return hubInfo();
@@ -633,8 +690,9 @@ ipcMain.handle('hub:set', (_e, patch) => setHub(patch || {}));
 ipcMain.handle('hub:open', (_e, key) => (FOLDERS[key] ? shell.openPath(FOLDERS[key]()) : 'unknown folder'));
 ipcMain.handle('hub:hardware', hwSummary);
 ipcMain.handle('cf:state', () => cfLast);
-ipcMain.on('cf:start', startClipForge);
-ipcMain.on('cf:restart', restartClipForge);
+// the page shows 'Starting…' at once; resend afterwards even if the state comes back the same
+ipcMain.on('cf:start', () => { cfSent = ''; startClipForge(); });
+ipcMain.on('cf:restart', () => { cfSent = ''; restartClipForge(); });
 ipcMain.handle('install:state', installState);
 ipcMain.handle('install:run', (_e, id) => runInstall(id));
 ipcMain.handle('models:overview', overview);
@@ -833,8 +891,11 @@ function startAgentApi() {
   for (const f of ['mcp.js', 'mcp-tools.js']) {
     try { fs.copyFileSync(path.join(__dirname, f), USER(f)); } catch (e) { console.error('MCP connector:', e.message); }
   }
-  const srv = agentapi.start({ getKey: () => hubSettings().agentKey, allowed: (a) => !!hubSettings()[AGENT_SWITCH[a]], handlers: agentHandlers,
-    onAgent: (name) => { lastAgent = { name: name === 'starnet-harness' ? 'Starnet' : name, at: Date.now() }; send('agent:seen', lastAgent); } });
+  const srv = agentapi.start({ keys: () => keysOf(hubSettings()), allowed: (a) => !!hubSettings()[AGENT_SWITCH[a]], handlers: agentHandlers,
+    onAgent: (name, scope) => {
+      lastAgent[scope] = { name: name === 'starnet-harness' ? 'Starnet' : name, at: Date.now() };
+      send('agent:seen', lastAgent);
+    } });
   srv.on('error', (e) => console.error('App Hub API could not start:', e.message)); // e.g. the port is taken
 }
 
@@ -844,15 +905,17 @@ app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(
 if (WIN) app.setAppUserModelId('com.bryce.apphub'); // notifications show "App Hub", not "electron.app"
 
 app.whenReady().then(() => {
+  createWindow(); // first, so the window loads while ClipForge's code is copied
   try { syncClipForge(); } catch (e) { console.error('Could not copy ClipForge:', e.message); }
   startOllama();
   if (cfReady()) updateYtDlp(startClipForge);
-  createWindow();
-  startMine('my-omniroute'); // OmniRoute takes ~30 s to start, so it's ready by the time you click it
+  // OmniRoute takes ~30 s to start: begin after the hub and ClipForge are up, so it's ready when you click it.
+  // A click before that starts it at once; startMine never starts a second copy.
+  setTimeout(() => startMine('my-omniroute'), 20000);
   startAgentApi();
   cfPoll();
   setInterval(cfPoll, 3000);
   setInterval(sleepTabs, 60000);
 });
-app.on('before-quit', () => { if (server) server.kill(); });
+app.on('before-quit', () => { if (server) stopServer(); });
 app.on('window-all-closed', () => app.quit());
