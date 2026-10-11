@@ -6,7 +6,8 @@
 //   /mcp/<app>    one app's tools only, named without the app in front (clipforge: make_clips, ...)
 const http = require('http');
 const crypto = require('crypto');
-const { tools, forApp, instructions, rpc, APPS } = require('../mcp-tools');
+const { tools, forApp, forUserApp, instructions, rpc, APPS } = require('../mcp-tools');
+const { isUserApp } = require('./appconnectors');
 
 const PORT = 8770;
 const newKey = (app) => 'ahk_' + (app ? app.slice(0, 2) + '_' : '') + crypto.randomBytes(24).toString('hex');
@@ -21,28 +22,34 @@ function keyOk(header, key) {
 // Which key this is: 'all', an app, or null. keys: { all, clipforge, models, apps }.
 const scopeOf = (header, keys) => Object.keys(keys).find((scope) => keyOk(header, keys[scope])) || null;
 const mayUse = (scope, app) => scope === 'all' || scope === app;
-const wrongKey = (app) => `This key is not for ${APPS[app].title}. Use ${APPS[app].title}'s key or the all-apps key (App Hub > Settings > Starnet & agents).`;
+let titleOf = (app) => (APPS[app] ? APPS[app].title : app); // start() adds the names of the user's apps
+const wrongKey = (app) => `This key is not for ${titleOf(app)}. Use ${titleOf(app)}'s key or the all-apps key (App Hub > Settings > Starnet & agents).`;
 
 // Which app a path belongs to: /v1/<app>/... (status is allowed with any valid key).
-const appOf = (p) => (/^\/v1\/(clipforge|models|apps|myapps)(\/|$)/.exec(p) || [])[1] || null;
+// (an app the user added is /v1/app-<id>/...)
+const appOf = (p) => (/^\/v1\/(clipforge|models|apps|myapps|app-[a-z0-9]+)(\/|$)/.exec(p) || [])[1] || null;
 
 // handlers: { status(), clipforge(...), models(...), apps(...), myapps(...) }, each (method, rest, body)
 // each returns { status: <number>, body } or a plain object (200).
 // keys(): { all, clipforge, models, apps }. onAgent(clientName, scope): an MCP client connected with that key.
 // expired(scope): when that key stopped working (ms), or null. onCall({ scope, tool, ok, ms }): after every request
 // with a valid key; tool is the MCP tool name or "GET /v1/...", null for MCP housekeeping (initialize, tools/list).
-function start({ keys, allowed, handlers, onAgent = () => {}, expired = () => null, onCall = () => {}, port = PORT }) {
+// handlers.userApp(id, method, rest, body): an app the user added. title(id): an app's name, null for an app that's gone.
+function start({ keys, allowed, handlers, onAgent = () => {}, expired = () => null, onCall = () => {}, title = () => null, port = PORT }) {
+  titleOf = (app) => (APPS[app] ? APPS[app].title : title(app) || app);
   async function route(method, pathAndQuery, body, scope) {
     const url = new URL(pathAndQuery, 'http://x');
     const p = url.pathname.replace(/\/+$/, '');
     try {
       if (p === '/v1/status') return { status: 200, body: await handlers.status() };
       const appName = appOf(p);
-      if (!appName || !handlers[appName]) return { status: 404, body: { error: 'Unknown path. Try GET /v1/status' } };
+      if (appName && isUserApp(appName) && !title(appName)) return { status: 404, body: { error: 'That app is no longer in App Hub.' } };
+      const handler = appName && (isUserApp(appName) ? handlers.userApp && ((...a) => handlers.userApp(appName, ...a)) : handlers[appName]);
+      if (!handler) return { status: 404, body: { error: 'Unknown path. Try GET /v1/status' } };
       if (!mayUse(scope, appName)) return { status: 403, body: { error: wrongKey(appName) } };
-      if (!allowed(appName)) return { status: 403, body: { error: `Agent access to ${APPS[appName].title} is switched off (App Hub > Settings > Starnet & agents)` } };
+      if (!allowed(appName)) return { status: 403, body: { error: `Agent access to ${titleOf(appName)} is switched off (App Hub > Settings > Starnet & agents)` } };
       const rest = p.slice(`/v1/${appName}`.length).replace(/^\//, '') + url.search;
-      const r = await handlers[appName](method, rest, body);
+      const r = await handler(method, rest, body);
       // { status: <number>, body } sets the HTTP status; anything else (e.g. a video with status "done") is the body
       return r && typeof r.status === 'number' && 'body' in r ? r : { status: 200, body: r };
     } catch (e) {
@@ -80,15 +87,18 @@ function start({ keys, allowed, handlers, onAgent = () => {}, expired = () => nu
       body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : null;
     } catch { return send(400, { error: 'The body must be JSON' }); }
 
-    const m = /^\/mcp(?:\/(clipforge|models|apps|myapps))?$/.exec(req.url.split('?')[0].replace(/\/+$/, ''));
+    const m = /^\/mcp(?:\/(clipforge|models|apps|myapps|app-[a-z0-9]+))?$/.exec(req.url.split('?')[0].replace(/\/+$/, ''));
     if (m) {
       // Streamable HTTP, stateless: one JSON-RPC message (or a batch) per POST, the reply as JSON.
       if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return send(405, { error: 'POST JSON-RPC to this address' }); }
       const app = m[1] || null;
+      if (app && isUserApp(app) && !title(app)) return send(404, { error: 'That app is no longer in App Hub.' });
       if (app && !mayUse(scope, app)) return send(403, { error: wrongKey(app) });
       // /mcp/<app>: that app's tools; /mcp: every tool the key may use (an app key there gets just its app's)
-      const list = app ? forApp(listFor(scope), app) : listFor(scope).filter((t) => t.app === 'hub' || mayUse(scope, t.app));
-      const opts = { onInit: (client) => onAgent((client && client.name) || 'an MCP client', app || scope), instructions: instructions(app) };
+      const list = !app ? listFor(scope).filter((t) => t.app === 'hub' || mayUse(scope, t.app))
+        : isUserApp(app) ? forUserApp(listFor(scope), app) : forApp(listFor(scope), app);
+      const opts = { onInit: (client) => onAgent((client && client.name) || 'an MCP client', app || scope),
+        instructions: isUserApp(app) ? instructions(app, title(app)) : instructions(app) };
       const msgs = Array.isArray(body) ? body : [body];
       if (msgs.every((x) => x && x.id === undefined)) return send(202); // only notifications: nothing to answer
       // A tool may wait minutes for a video. fetch clients (Starnet's included) give up after 5 silent minutes,

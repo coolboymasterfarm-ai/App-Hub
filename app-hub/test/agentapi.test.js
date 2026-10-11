@@ -169,3 +169,32 @@ test('App Hub API: an expired key is refused; every call is reported (tool, ok, 
     assert.ok(calls.every((c) => typeof c.ms === 'number'));
   } finally { srv.close(); }
 });
+
+test('An app the user added: its own connector and key; gone apps are refused', async () => {
+  const notes = agentapi.newKey('app-n1'), cf = agentapi.newKey('clipforge');
+  const names = { 'app-n1': 'Notes' };
+  const got = [];
+  const srv = agentapi.start({
+    port: 0, keys: () => ({ 'app-n1': notes, clipforge: cf }), allowed: () => true, title: (id) => names[id] || null,
+    handlers: { status: () => ({ ok: true }), clipforge: () => ({}), models: () => ({}), apps: () => [],
+      userApp: (id, m, rest) => { got.push([id, m, rest]); return { id, rest }; } },
+  });
+  await once(srv, 'listening');
+  const port = srv.address().port;
+  const rpc = (p, k, msg) => call(port, { method: 'POST', path: p, headers: { Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, ...msg }) });
+  try {
+    const list = (await rpc('/mcp/app-n1', notes, { method: 'tools/list' })).body.result.tools.map((t) => t.name);
+    assert.deepStrictEqual(list, ['status', 'info', 'check', 'open']);
+    const init = await rpc('/mcp/app-n1', notes, { method: 'initialize', params: {} });
+    assert.match(init.body.result.instructions, /^Notes, an app the user added/);
+    const r = await rpc('/mcp/app-n1', notes, { method: 'tools/call', params: { name: 'open', arguments: {} } });
+    assert.deepStrictEqual(JSON.parse(r.body.result.content[0].text), { id: 'app-n1', rest: 'open' });
+    assert.deepStrictEqual(got, [['app-n1', 'POST', 'open']]);
+    const no = await rpc('/mcp/app-n1', cf, { method: 'tools/list' });                  // ClipForge's key: not this app
+    assert.deepStrictEqual([no.status, /not for Notes/.test(no.body.error)], [403, true]);
+    assert.strictEqual((await call(port, { path: '/v1/clipforge/x', headers: { Authorization: 'Bearer ' + notes } })).status, 403);
+    delete names['app-n1'];                                                              // the app was removed
+    assert.strictEqual((await rpc('/mcp/app-n1', notes, { method: 'tools/list' })).status, 404);
+  } finally { srv.close(); }
+});
