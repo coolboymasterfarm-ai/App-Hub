@@ -5,10 +5,12 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { tools, forApp, instructions, rpc, APPS } = require('./mcp-tools');
+const { tools, forApp, forUserApp, instructions, rpc, APPS } = require('./mcp-tools');
 
 const BASE = process.env.APP_HUB_URL || 'http://127.0.0.1:8770';
-const APP = APPS[process.env.APP_HUB_APP] ? process.env.APP_HUB_APP : null;
+const USER_APP = /^app-[a-z0-9]+$/.test(process.env.APP_HUB_APP || ''); // an app the user added to App Hub
+const APP = APPS[process.env.APP_HUB_APP] || USER_APP ? process.env.APP_HUB_APP : null;
+const title = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'apps.json'), 'utf8')).find((a) => a.id === APP).name; } catch { return 'An app'; } };
 // mcp.js is copied next to hub-settings.json, so a key reset in App Hub needs no config change here.
 function key() {
   try {
@@ -35,7 +37,7 @@ function api(method, p, body) {
   });
 }
 
-const list = APP ? forApp(tools(api), APP) : tools(api);
+const list = USER_APP ? forUserApp(tools(api), APP) : APP ? forApp(tools(api), APP) : tools(api);
 const out = (m) => m && process.stdout.write(JSON.stringify(m) + '\n');
 
 let buf = '';
@@ -48,6 +50,6 @@ process.stdin.on('data', (d) => {
     if (!line) continue;
     let msg;
     try { msg = JSON.parse(line); } catch { out({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }); continue; }
-    rpc(msg, list, { instructions: instructions(APP) }).then(out);
+    rpc(msg, list, { instructions: USER_APP ? instructions(APP, title()) : instructions(APP) }).then(out);
   }
 });

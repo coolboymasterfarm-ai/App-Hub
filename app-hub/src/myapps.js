@@ -86,4 +86,15 @@ function myApps(env = process.env) {
   };
 }
 
-module.exports = { myApps, starnetPort, shortcuts, findNode, npmBin, tail };
+// What an agent sees about My Apps: running or not, port and addresses. state: mineState()'s list ({ id: 'my-<app>', ... }).
+function statusFor(all, state) {
+  return Object.entries(all).map(([app, a]) => {
+    const s = state.find((x) => x.id === 'my-' + app) || {};
+    const url = a.url();
+    const port = url ? Number(new URL(url).port) || null : null;
+    return { app, name: a.name, installed: !!s.installed, running: !!s.running, port: s.running ? port : null,
+      address: s.running ? url : null, ...(app !== 'starnet' && { api: s.running ? url + 'v1' : null }) };
+  });
+}
+
+module.exports = { myApps, starnetPort, shortcuts, findNode, npmBin, tail, statusFor };

@@ -185,6 +185,7 @@ $('app-edit').onclick = () => openDialog(apps.find((a) => a.id === page));
 
 // ---------------------------------------------------------------- keyboard shortcuts (sent from any page by the main process)
 
+hub.onShow((id) => show(id));
 hub.onShortcut((a) => {
   const ids = order();
   if (a.startsWith('go:')) { const id = ids[+a.slice(3) - 1]; if (id) show(id); }
@@ -247,7 +248,7 @@ $('app-form').onsubmit = async (e) => {
   $('app-dialog').close();
   renderSide();
   if (page === 'home') renderTiles();
-  if (added) { toast(`${added.name} added`); show(added.id); }
+  if (added) { toast(`${added.name} added. Agents get its own connector and key in Settings > Starnet & agents.`, 4000); show(added.id); }
   else if (editing && page === editing.id) { tabs.delete(editing.id); show(editing.id); }
 };
 
@@ -558,16 +559,17 @@ $('ollama-btn').onclick = async () => {
 let agent = null, settingsNow = {}, keyShown = false;
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(t).toLocaleString(); };
 const seenText = (a) => a && el('span', { className: 'ok-dot' }, `● Connected: ${a.name}, ${ago(a.at)}`);
-const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''] };
+const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''], myapps: ['bot', ''] };
 const CONN_NOTE = {
   all: 'Every app below in one connector.',
   clipforge: 'Make clips, wait for them, send them to Starnet, transcripts, edits, HyperFrames styles.',
   models: "This PC's hardware and models: download and switch models.",
+  myapps: 'Is StarNet, FreeLLMAPI or OmniRoute running, and on which port (read only).',
   apps: 'The list of apps you added (read only).',
 };
 // One row per connector: its address and key to paste into Starnet, Reset, and (per app) the on/off switch.
 function connRow(c) {
-  const [ico, cls] = CONN_ICON[c.scope];
+  const [ico, cls] = CONN_ICON[c.scope] || ['globe', ''];
   const reset = async () => {
     if (!confirm(`Make a new key for ${c.title}? Agents using the old one stop reaching it until you paste the new key into them ` +
       '(Starnet: CONNECTED SERVICES → that connector → ✎ EDIT → bearer token → SAVE & RECONNECT).')) return;
@@ -579,7 +581,7 @@ function connRow(c) {
     onchange: (e) => hub.set({ [c.sw]: e.target.checked }) }), el('i'));
   return el('div', { className: 'srow' }, el('span', { className: 'sico' + cls }, icon(ico)),
     el('span', { className: 'stext' }, el('b', {}, c.title),
-      el('span', {}, CONN_NOTE[c.scope]),
+      el('span', {}, CONN_NOTE[c.scope] || 'Your app: its address, is it answering, and open it here (info, check, open).'),
       el('span', { className: 'mono' }, `Starnet id ${c.id} · ${c.url}`),
       el('span', { className: 'mono' }, 'Key ' + (keyShown ? c.key : c.key.slice(0, 8) + '•'.repeat(16))),
       seenText(agent.lastAgent[c.scope]), keyLife(c)),

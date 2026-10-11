@@ -92,6 +92,12 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     counted from when the key was made or Reset). An expired key gets a 401 that says how to make a new one.
     "Recent agent calls": the last 50 calls (time, agent, key, tool or /v1 path, worked or failed, time taken),
     saved in userData/agent-log.json.
+29. My Apps for agents: its own connector (/mcp/myapps, Starnet id myapps), key and switch. One read-only tool,
+    running (myapps_running in the all-apps connector): installed/running/port/address per app, plus the OpenAI-style
+    API address for FreeLLMAPI and OmniRoute. It never starts or stops them.
+30. Every app the user adds gets its own connector (src/appconnectors.js): /mcp/<app id>, its own key (made when the app
+    is added, deleted when it's removed), a Starnet id from its name, and a Claude Code server. Tools: status, info
+    (name, address), check (is it answering), open (shows it in its App Hub tab). The Other Apps switch covers them.
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native

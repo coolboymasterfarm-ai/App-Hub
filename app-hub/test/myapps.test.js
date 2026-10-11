@@ -73,3 +73,19 @@ test('tail: the end of a big log, whole small files, empty for a missing one', (
   assert.strictEqual(tail(f), fs.readFileSync(f, 'utf8'));
   assert.strictEqual(tail(f + '.nope'), '');
 });
+
+test('statusFor: what an agent sees about My Apps (port and address only while running)', () => {
+  const { statusFor } = require('../src/myapps');
+  const all = {
+    starnet: { name: 'StarNet', url: () => 'http://127.0.0.1:57653/' },
+    freellmapi: { name: 'FreeLLMAPI', url: () => 'http://127.0.0.1:31415/' },
+    omniroute: { name: 'OmniRoute', url: () => 'http://127.0.0.1:20128/' },
+  };
+  const state = [{ id: 'my-starnet', installed: true, running: true }, { id: 'my-freellmapi', installed: true, running: false }];
+  assert.deepStrictEqual(statusFor(all, state), [
+    { app: 'starnet', name: 'StarNet', installed: true, running: true, port: 57653, address: 'http://127.0.0.1:57653/' },
+    { app: 'freellmapi', name: 'FreeLLMAPI', installed: true, running: false, port: null, address: null, api: null },
+    { app: 'omniroute', name: 'OmniRoute', installed: false, running: false, port: null, address: null, api: null },
+  ]);
+  assert.strictEqual(statusFor({ omniroute: all.omniroute }, [{ id: 'my-omniroute', installed: true, running: true }])[0].api, 'http://127.0.0.1:20128/v1');
+});
