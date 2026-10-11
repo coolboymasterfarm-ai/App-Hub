@@ -35,6 +35,7 @@
     <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
     <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14 9l2 2"/></symbol>
     <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/></symbol>
   </svg>
 
@@ -163,6 +164,46 @@
               <button class="btn ghost" data-open="hub"><svg class="i"><use href="#i-folder"/></svg>App Hub data</button>
             </div>
             <p class="muted small" id="set-where"></p>
+          </div>
+          <div class="card set" id="agents">
+            <h3>Starnet &amp; agents</h3>
+            <p class="muted small">Lets AI agents on this PC (your Starnet crew, Claude Code) use App Hub's apps as tools: make clips,
+              wait for them, send them to an agent, change styles, download models. Only programs on this PC can connect, and they need the key.</p>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bot"/></svg></span>
+              <span class="stext"><b>Starnet</b><span id="agent-seen">…</span></span></div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-globe"/></svg></span>
+              <span class="stext"><b>Connector address</b><span class="mono" id="agent-mcpurl">…</span></span>
+              <button class="btn ghost sm" id="agent-copyurl">Copy</button></div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-key"/></svg></span>
+              <span class="stext"><b>Key</b><span class="mono" id="agent-key">…</span></span>
+              <button class="btn ghost sm" id="agent-show">Show</button>
+              <button class="btn ghost sm" id="agent-copy">Copy</button>
+              <button class="btn ghost sm danger" id="agent-new">Reset key</button></div>
+            <div class="steps">
+              <b>Connect Starnet (one time)</b>
+              <ol>
+                <li>In Starnet, open <b>CONNECT</b> → <b>ABILITIES</b> → <b>CONNECTED SERVICES</b> → <b>ADD A CONNECTOR</b>.</li>
+                <li>id <span class="mono">apphub</span>, label <span class="mono">App Hub</span>, choose <b>HTTP</b>.</li>
+                <li>Paste the connector address into the URL box and the key into <b>bearer token</b>.</li>
+                <li>Open <b>advanced</b> and set <b>timeout ms</b> to <span class="mono">600000</span> <button class="btn ghost sm" id="agent-copytimeout">Copy</button> so App Hub can finish a video in one call.</li>
+                <li>Click <b>+ ADD &amp; CONNECT</b>. Starnet should say <b>connected — 18 tool(s)</b>, and this card shows "Connected".</li>
+              </ol>
+              <span class="muted small">Schedules: on each Starnet routine that uses App Hub, tick <b>Let this routine use your connected tools</b>.
+                After <b>Reset key</b>: in Starnet, <b>CONNECTED SERVICES</b> → App Hub → <b>✎ EDIT</b>, paste the new key, <b>SAVE &amp; RECONNECT</b>.</span>
+            </div>
+            <label class="srow"><span class="sico cf"><svg class="i"><use href="#i-scissors"/></svg></span><span class="stext"><b>ClipForge</b><span>Make clips, wait for them, send them to Starnet, transcripts, edits, HyperFrames styles.</span></span>
+              <span class="sw"><input type="checkbox" data-agent="agentClipforge"><i></i></span></label>
+            <label class="srow"><span class="sico"><svg class="i"><use href="#i-chip"/></svg></span><span class="stext"><b>AI Models</b><span>See this PC's hardware and models, download and switch models.</span></span>
+              <span class="sw"><input type="checkbox" data-agent="agentModels"><i></i></span></label>
+            <label class="srow"><span class="sico"><svg class="i"><use href="#i-globe"/></svg></span><span class="stext"><b>Your apps</b><span>See the list of apps you added (read only).</span></span>
+              <span class="sw"><input type="checkbox" data-agent="agentApps"><i></i></span></label>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Tell Starnet when videos finish</b><span>Leaves a note in <span class="mono" id="agent-drop">…</span>. Point a Starnet work line's folder trigger at it.</span></span>
+              <button class="btn ghost sm" data-open="drop">Open</button>
+              <label class="sw"><input type="checkbox" data-agent="starnetDrop" aria-label="Tell Starnet when videos finish"><i></i></label></div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-box"/></svg></span>
+              <span class="stext"><b>Claude Code</b><span>Copies the MCP config. Paste it into <span class="mono">.mcp.json</span> in your project folder, then restart Claude Code.</span></span>
+              <button class="btn ghost sm" id="agent-mcp">Copy config</button></div>
+            <p class="muted small" id="agent-url"></p>
           </div>
           <div class="card set">
             <h3>Keyboard shortcuts</h3>

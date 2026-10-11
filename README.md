@@ -68,12 +68,31 @@ The files land in `app-hub\dist\`.
 - **Install Ollama** from Home or the AI Models tab if it's missing (via winget, hidden). Ollama is started with the hub.
 - **Low-disk and won't-fit warnings** before a download starts.
 
+## Let your agents use App Hub (Starnet, Claude Code)
+
+Your [Starnet](https://github.com/androoAGI/starnet) crew can use App Hub's apps as tools. They can clip a video
+(or a channel's newest upload) in one call, wait for it, copy the best clips into their own folder, change
+HyperFrames styles, and download models. That works from a chat, a schedule, Telegram or a work line. Only
+programs on your PC can connect, and they need your key.
+
+**Set up and examples: [starnet/README.md](starnet/README.md).** In short:
+1. In App Hub, go to **Settings → Starnet & agents** and copy the connector address
+   (`http://127.0.0.1:8770/mcp`) and the key.
+2. In Starnet, go to **CONNECT → ABILITIES → CONNECTED SERVICES → ADD A CONNECTOR**. Use id `apphub`, type
+   **HTTP**, paste both, set timeout ms to `600000`, then click **+ ADD & CONNECT**.
+3. Import the skill (`starnet/app-hub-clipforge.starnet-skill.json`) and the recipes (`starnet/recipes/`).
+
+**Reset key** makes a new key and copies it for you; paste it into Starnet's connector (**✎ EDIT**). For Claude
+Code, click **Copy config** and paste it into `.mcp.json`; it keeps working after a key reset. Scripts can use
+the same API: `http://127.0.0.1:8770/v1/...` with `Authorization: Bearer <key>`, starting with `GET /v1/status`.
+
 ## Where things live (installed .exe)
 
 - ClipForge, its Python, tools and models: `%LOCALAPPDATA%\App Hub\ClipForge` (kept when you update or reinstall App Hub).
 - Your app list: `%APPDATA%\App Hub\apps.json`. Folder apps: `%APPDATA%\App Hub\apps\`.
 - Hub settings and window position: `%APPDATA%\App Hub\hub-settings.json`, `window.json`. ClipForge's log: `clipforge.log` there too.
 - Clips: `%LOCALAPPDATA%\App Hub\ClipForge\data\projects\<id>\clips\`.
+- Notes for Starnet (when switched on): `Documents\App Hub\Starnet inbox\`. Clips sent to Starnet: `<Starnet's workspaces>\<agent>\clipforge\<id>\`.
 
 ## Developing
 

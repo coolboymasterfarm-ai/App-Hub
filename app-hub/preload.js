@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('hub', {
   open: (folder) => ipcRenderer.invoke('hub:open', folder),
   hardware: () => ipcRenderer.invoke('hub:hardware'),
   onShortcut: on('hub:shortcut'),
+  onAgentSeen: on('agent:seen'),
   // pages: the hub page owns the layout and tells the main process where app pages go
   show: (id) => ipcRenderer.send('page:show', id),
   rect: (r) => ipcRenderer.send('page:rect', r),

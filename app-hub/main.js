@@ -6,6 +6,8 @@ const { spawn } = require('child_process');
 const hardware = require('./src/hardware');
 const models = require('./src/models');
 const apps = require('./src/apps');
+const agentapi = require('./src/agentapi');
+const starnet = require('./src/starnet');
 
 const PORT = 8765;
 const WIN = process.platform === 'win32';
@@ -95,6 +97,7 @@ function notifyFinished(projects) {
     const was = seen.get(p.id);
     seen.set(p.id, p.status);
     if (!primed || !was || was === p.status || !['done', 'error'].includes(p.status)) continue;
+    if (p.status === 'done' && hubSettings().starnetDrop) dropForStarnet(p.id);
     if (!hubSettings().notifications || !Notification.isSupported()) continue;
     if (win && win.isFocused() && page === 'clipforge') continue; // they're looking at it
     const n = p.status === 'done'
@@ -108,23 +111,45 @@ function notifyFinished(projects) {
 
 // ---------------------------------------------------------------- hub settings
 
-const HUB_DEFAULTS = { notifications: true };
+// agent*: which apps agents may use through the App Hub API (src/agentapi.js)
+// starnetDrop: leave a note in DROP_DIR when a video finishes, for a Starnet folder trigger
+const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, starnetDrop: false };
 
 function hubSettings() {
-  try { return { ...HUB_DEFAULTS, ...JSON.parse(fs.readFileSync(USER('hub-settings.json'), 'utf8')) }; }
-  catch { return { ...HUB_DEFAULTS }; }
+  let s;
+  try { s = { ...HUB_DEFAULTS, ...JSON.parse(fs.readFileSync(USER('hub-settings.json'), 'utf8')) }; }
+  catch { s = { ...HUB_DEFAULTS }; }
+  if (!s.agentKey) { s.agentKey = agentapi.newKey(); apps.save(USER('hub-settings.json'), s); } // first start
+  return s;
+}
+
+// What an agent needs to connect: the API address, the key, the Starnet connector address, a ready-made
+// MCP config for Claude Code, and the last agent that connected.
+let lastAgent = null;
+function agentInfo(key) {
+  return {
+    url: `http://127.0.0.1:${agentapi.PORT}`,
+    mcpUrl: `http://127.0.0.1:${agentapi.PORT}/mcp`,
+    key, lastAgent, starnet: starnet.workspaces(), dropDir: DROP_DIR(),
+    mcp: { mcpServers: { 'app-hub': {
+      command: process.execPath, args: [USER('mcp.js')],
+      env: { ELECTRON_RUN_AS_NODE: '1', APP_HUB_KEY: key }, // runs the connector with App Hub's own Node
+    } } },
+  };
 }
 
 function hubInfo() {
+  const settings = hubSettings();
   return {
-    version: app.getVersion(), cfDir: CF_DIR, platform: process.platform, settings: hubSettings(),
-    openAtLogin: app.getLoginItemSettings().openAtLogin,
+    version: app.getVersion(), cfDir: CF_DIR, platform: process.platform, settings,
+    openAtLogin: app.getLoginItemSettings().openAtLogin, agent: agentInfo(settings.agentKey),
   };
 }
 
 function setHub(patch) {
   const s = hubSettings();
   for (const k of Object.keys(HUB_DEFAULTS)) if (k in patch) s[k] = !!patch[k];
+  if (patch.newAgentKey) { s.agentKey = agentapi.newKey(); lastAgent = null; } // the old key stops working at once
   apps.save(USER('hub-settings.json'), s);
   // Start-with-Windows lives in Windows itself, not in our file.
   if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: !!patch.openAtLogin });
@@ -137,6 +162,7 @@ const FOLDERS = {
   music: () => path.join(CF_DIR, 'data', 'music'),
   hub: () => app.getPath('userData'),
   log: () => USER('clipforge.log'),
+  drop: () => (fs.mkdirSync(DROP_DIR(), { recursive: true }), DROP_DIR()),
 };
 
 let hwCache = null; // hardware doesn't change while the app runs
@@ -549,6 +575,138 @@ ipcMain.on('page:cover', (_e, on) => { covered = !!on; layout(); });
 ipcMain.on('tab:nav', (_e, id, action) => navigate(id, action));
 ipcMain.on('tab:close', (_e, id) => closeView(id));
 
+// ---------------------------------------------------------------- App Hub API for agents
+
+const AGENT_SWITCH = { clipforge: 'agentClipforge', models: 'agentModels', apps: 'agentApps' };
+
+const agentHandlers = {
+  status: () => {
+    const s = hubSettings();
+    return { app: 'App Hub', version: app.getVersion(), clipforge: cfLast.state,
+      access: Object.fromEntries(Object.entries(AGENT_SWITCH).map(([a, k]) => [a, s[k]])),
+      starnet_folder: starnet.workspaces() };
+  },
+  // ClipForge's own API, passed through (projects, clips, transcript, settings, options, jobs),
+  // plus App Hub's one-call workflows: run (make clips, wait, send to Starnet) and wait/<id>.
+  async clipforge(method, rest, body) {
+    if (cfLast.state !== 'ready') return { status: 503, body: { error: `ClipForge is ${cfLast.state.replace('-', ' ')}. Open App Hub's ClipForge page to start it.` } };
+    if (method === 'POST' && rest === 'run') return runClips(body || {});
+    const w = method === 'POST' && /^wait\/([^/?]+)$/.exec(rest);
+    if (w) return finish(w[1], body || {});
+    const r = await fetch(`${CF_URL}/api/${rest}`, {
+      method, body: body ? JSON.stringify(body) : undefined, headers: body ? { 'Content-Type': 'application/json' } : {},
+    });
+    const data = await r.json().catch(() => ({}));
+    // agents run on this PC: tell them where a video's files are
+    const m = method === 'GET' && /^projects\/([a-z0-9]+)$/.exec(rest);
+    if (r.ok && m) data.folder = path.join(CF_DIR, 'data', 'projects', m[1]);
+    return { status: r.status, body: data };
+  },
+  async models(method, rest, body) {
+    if (method === 'GET' && !rest) return overview();
+    const kind = body && body.kind, id = body && String(body.id || '');
+    if (!['ollama', 'whisper'].includes(kind) || !id) return { status: 400, body: { error: 'Send {"kind": "ollama" or "whisper", "id": "<model>"}' } };
+    if (method === 'POST' && rest === 'download') return download(kind, id);
+    if (method === 'POST' && rest === 'use') return use(kind, id);
+    return { status: 404, body: { error: 'Use GET /v1/models, POST /v1/models/download or /v1/models/use' } };
+  },
+  apps: (method) => (method === 'GET' ? apps.load(APPS_FILE()) : { status: 405, body: { error: 'Apps are read-only' } }),
+};
+
+// ---- one-call ClipForge workflows (Starnet lets an unattended run make one connector call)
+
+const PROJECTS = () => path.join(CF_DIR, 'data', 'projects');
+const readProject = (id) => JSON.parse(fs.readFileSync(path.join(PROJECTS(), id, 'project.json'), 'utf8'));
+const FINAL = ['done', 'error', 'cancelled'];
+
+// Wait (up to 9.5 min - Starnet's longest connector timeout is 10) for a video, then sum it up and
+// optionally copy its best clips into a Starnet agent's folder.
+async function finish(id, a) {
+  if (!/^[a-z0-9]+$/.test(id) || !fs.existsSync(path.join(PROJECTS(), id, 'project.json'))) return { status: 404, body: { error: `No video with id ${id}` } };
+  const until = Date.now() + Math.min(Math.max(Number(a.wait_minutes) || 0, 0), 9.5) * 60000;
+  let p = readProject(id);
+  while (!FINAL.includes(p.status) && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 3000));
+    p = readProject(id);
+  }
+  const folder = path.join(PROJECTS(), id);
+  const out = starnet.summary(p, folder);
+  if (a.send_to_starnet && p.status === 'done') out.starnet = starnet.sendToStarnet(p, folder, String(a.send_to_starnet), Number(a.best) || 0);
+  return out;
+}
+
+async function runClips(a) {
+  let input = String(a.input || '').trim();
+  if (!input) return { status: 400, body: { error: 'input is required: a YouTube link or a video file path' } };
+  if (a.newest) input = await newestVideo(input);
+  if (a.skip_if_done) {
+    const old = findProject(input);
+    if (old) return { ...(await finish(old, a)), reused: 'This video was clipped before; these are those clips.' };
+  }
+  const r = await fetch(CF_URL + '/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input, topic: a.topic, from_min: a.from_min, to_min: a.to_min }) });
+  const made = await r.json().catch(() => ({}));
+  if (!r.ok) return { status: r.status, body: { error: made.detail || made.error || `ClipForge said ${r.status}` } };
+  const out = await finish(made.project, a); // ClipForge answers { project, job, count }
+  if (made.count > 1) out.note = `Started ${made.count} videos; this is the first. See clipforge_list_videos for the rest.`;
+  return out;
+}
+
+// The newest clip-able video for this input, if ClipForge already has one that didn't fail.
+function findProject(input) {
+  const key = starnet.videoKey(input);
+  let best = null;
+  for (const id of fs.existsSync(PROJECTS()) ? fs.readdirSync(PROJECTS()) : []) {
+    let p;
+    try { p = readProject(id); } catch { continue; }
+    if (starnet.videoKey(p.input) === key && !['error', 'cancelled'].includes(p.status) && (!best || p.created > best.created)) best = p;
+  }
+  return best && best.id;
+}
+
+// The newest upload of a YouTube channel, via ClipForge's yt-dlp.
+function newestVideo(url) {
+  let u = url.replace(/\/+$/, '');
+  if (/youtube\.com\/(@[^/]+|channel\/[^/]+|c\/[^/]+|user\/[^/]+)$/.test(u)) u += '/videos';
+  return new Promise((resolve, reject) => {
+    const p = spawn(PY, ['-m', 'yt_dlp', '--flat-playlist', '--playlist-items', '1', '--print', 'url', u], { cwd: CF_DIR, windowsHide: true });
+    let out = '', err = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
+    const t = setTimeout(() => p.kill(), 60000);
+    p.on('error', (e) => { clearTimeout(t); reject(e); });
+    p.on('exit', () => {
+      clearTimeout(t);
+      const v = out.trim().split(/\r?\n/)[0];
+      if (/^https?:\/\//.test(v)) resolve(v);
+      else reject(new Error('Could not find the newest video on that channel: ' + (err.trim().split(/\r?\n/).pop() || 'it has no videos')));
+    });
+  });
+}
+
+// "When a video finishes" for Starnet: a small JSON note in a folder a Starnet folder trigger watches.
+// Written as .tmp then renamed - Starnet ignores .tmp files, so it never reads half a note.
+const DROP_DIR = () => path.join(app.getPath('documents'), 'App Hub', 'Starnet inbox');
+function dropForStarnet(id) {
+  try {
+    const f = path.join(DROP_DIR(), `clipforge-${id}.json`);
+    fs.mkdirSync(DROP_DIR(), { recursive: true });
+    const note = { event: 'clipforge video finished', ...starnet.summary(readProject(id), path.join(PROJECTS(), id)) };
+    fs.writeFileSync(f + '.tmp', JSON.stringify(note, null, 2));
+    fs.renameSync(f + '.tmp', f);
+  } catch (e) { console.error('Starnet note:', e.message); }
+}
+
+function startAgentApi() {
+  hubSettings(); // makes the key on first start, so Settings and the config always have one
+  for (const f of ['mcp.js', 'mcp-tools.js']) {
+    try { fs.copyFileSync(path.join(__dirname, f), USER(f)); } catch (e) { console.error('MCP connector:', e.message); }
+  }
+  const srv = agentapi.start({ getKey: () => hubSettings().agentKey, allowed: (a) => !!hubSettings()[AGENT_SWITCH[a]], handlers: agentHandlers,
+    onAgent: (name) => { lastAgent = { name: name === 'starnet-harness' ? 'Starnet' : name, at: Date.now() }; send('agent:seen', lastAgent); } });
+  srv.on('error', (e) => console.error('App Hub API could not start:', e.message)); // e.g. the port is taken
+}
+
 // Opening the .exe again just brings the open window to the front.
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
@@ -559,6 +717,7 @@ app.whenReady().then(() => {
   startOllama();
   if (cfReady()) updateYtDlp(startClipForge);
   createWindow();
+  startAgentApi();
   cfPoll();
   setInterval(cfPoll, 3000);
 });
