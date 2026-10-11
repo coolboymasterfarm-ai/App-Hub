@@ -582,11 +582,34 @@ function connRow(c) {
       el('span', {}, CONN_NOTE[c.scope]),
       el('span', { className: 'mono' }, `Starnet id ${c.id} · ${c.url}`),
       el('span', { className: 'mono' }, 'Key ' + (keyShown ? c.key : c.key.slice(0, 8) + '•'.repeat(16))),
-      seenText(agent.lastAgent[c.scope])),
+      seenText(agent.lastAgent[c.scope]), keyLife(c)),
+    el('select', { ariaLabel: `${c.title} key expires`, title: 'When this key stops working',
+      onchange: (e) => hub.set({ keyDays: { scope: c.scope, days: +e.target.value } }).then(paintAgent) },
+      ...[[0, 'No expiry'], [7, '7 days'], [30, '30 days'], [90, '90 days'], [365, '1 year']].map(([d, t]) =>
+        el('option', { value: d, textContent: t, selected: d === c.days }))),
     btn('ghost sm', 'Address', () => copyText(c.url, `${c.title} address copied - paste it into the URL box in Starnet`)),
     btn('ghost sm', 'Key', () => copyText(c.key, `${c.title} key copied - paste it into "bearer token" in Starnet`)),
     btn('ghost sm danger', 'Reset', reset), sw);
 }
+// "Last used 5 min ago · expires 10 Nov" (or "expired 1 Oct - press Reset")
+function keyLife(c) {
+  const used = c.lastUsed ? `Last used ${ago(c.lastUsed)}` : 'Not used yet';
+  const date = c.expires && new Date(c.expires).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const gone = c.expires && c.expires <= Date.now();
+  return el('span', { className: gone ? 'bad-text' : '' }, used + (date ? (gone ? ` · expired ${date} - press Reset for a new key` : ` · expires ${date}`) : ''));
+}
+// The last 50 calls agents made: when, who, which key, which tool, and whether it worked.
+function paintCalls() {
+  const calls = agent.calls || [];
+  $('calls-n').textContent = calls.length ? `(${calls.length})` : '(none yet)';
+  const title = (scope) => (agent.connectors.find((c) => c.scope === scope) || {}).title || scope;
+  $('agent-calls').replaceChildren(...calls.map((c) => el('div', { className: 'call' + (c.ok ? '' : ' bad') },
+    el('span', { className: 'muted', textContent: new Date(c.at).toLocaleTimeString() }),
+    el('span', { textContent: c.client }), el('span', { className: 'muted', textContent: title(c.scope) }),
+    el('span', { className: 'mono', textContent: c.tool }),
+    el('span', { textContent: (c.ok ? '✓' : '✗ failed') + (c.ms >= 1000 ? ` · ${Math.round(c.ms / 1000)} s` : '') }))));
+}
+hub.onAgentCall((c) => { if (agent) { agent.calls = [c, ...(agent.calls || [])].slice(0, 50); paintCalls(); } });
 function paintSeen() {
   const last = Object.values(agent.lastAgent).sort((a, b) => b.at - a.at)[0];
   $('agent-seen').replaceChildren(seenText(last)
@@ -597,6 +620,7 @@ function paintAgent(info) {
   settingsNow = info.settings;
   $('agent-show').textContent = keyShown ? 'Hide keys' : 'Show keys';
   $('agent-conns').replaceChildren(...agent.connectors.map(connRow));
+  paintCalls();
   $('agent-drop').textContent = agent.dropDir;
   $('agent-open').hidden = !agent.starnetApp;
   $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;

@@ -136,3 +136,29 @@ test('A key per app: each reaches only its app, and /mcp/<app> serves only its t
     srv.close();
   }
 });
+
+test('App Hub API: an expired key is refused; every call is reported (tool, ok, which key)', async () => {
+  const key = agentapi.newKey('clipforge'), old = agentapi.newKey('models');
+  const calls = [];
+  const srv = agentapi.start({
+    port: 0, keys: () => ({ clipforge: key, models: old }), allowed: () => true,
+    expired: (scope) => (scope === 'models' ? Date.UTC(2026, 9, 1) : null),
+    onCall: (c) => calls.push(c),
+    handlers: { status: () => ({ ok: true }), clipforge: () => ({ projects: [] }), models: () => ({}), apps: () => [] },
+  });
+  await once(srv, 'listening');
+  const port = srv.address().port;
+  const rpc = (msg, k = key, path = '/mcp/clipforge') => call(port, { method: 'POST', path, headers: { Authorization: 'Bearer ' + k, 'Content-Type': 'application/json' }, body: JSON.stringify(msg) });
+  try {
+    const r = await call(port, { headers: { Authorization: 'Bearer ' + old } });
+    assert.deepStrictEqual([r.status, /expired on 2026-10-01/.test(r.body.error)], [401, true]);
+    assert.strictEqual(calls.length, 0);                                       // a refused key isn't "used"
+    await rpc({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_videos', arguments: {} } });
+    await rpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'no_such_tool', arguments: {} } });
+    await call(port, { path: '/v1/clipforge/projects', headers: { Authorization: 'Bearer ' + key } });
+    assert.deepStrictEqual(calls.map((c) => [c.scope, c.tool, c.ok]), [
+      ['clipforge', null, true], ['clipforge', 'list_videos', true], ['clipforge', 'no_such_tool', false], ['clipforge', 'GET /v1/clipforge/projects', true]]);
+    assert.ok(calls.every((c) => typeof c.ms === 'number'));
+  } finally { srv.close(); }
+});

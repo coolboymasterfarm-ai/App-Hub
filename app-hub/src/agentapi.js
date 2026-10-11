@@ -29,7 +29,9 @@ const appOf = (p) => (/^\/v1\/(clipforge|models|apps)(\/|$)/.exec(p) || [])[1] |
 // handlers: { status(), clipforge(method, rest, body), models(method, rest, body), apps(method, rest, body) }
 // each returns { status: <number>, body } or a plain object (200).
 // keys(): { all, clipforge, models, apps }. onAgent(clientName, scope): an MCP client connected with that key.
-function start({ keys, allowed, handlers, onAgent = () => {}, port = PORT }) {
+// expired(scope): when that key stopped working (ms), or null. onCall({ scope, tool, ok, ms }): after every request
+// with a valid key; tool is the MCP tool name or "GET /v1/...", null for MCP housekeeping (initialize, tools/list).
+function start({ keys, allowed, handlers, onAgent = () => {}, expired = () => null, onCall = () => {}, port = PORT }) {
   async function route(method, pathAndQuery, body, scope) {
     const url = new URL(pathAndQuery, 'http://x');
     const p = url.pathname.replace(/\/+$/, '');
@@ -68,6 +70,9 @@ function start({ keys, allowed, handlers, onAgent = () => {}, port = PORT }) {
     }
     const scope = scopeOf(req.headers.authorization, keys());
     if (!scope) return send(401, { error: 'Missing or wrong API key (App Hub > Settings > Starnet & agents)' });
+    const ended = expired(scope);
+    if (ended) return send(401, { error: `This key expired on ${new Date(ended).toISOString().slice(0, 10)}. Make a new one: App Hub > Settings > Starnet & agents > Reset.` });
+    const t0 = Date.now();
     let body = null;
     try {
       const chunks = [];
@@ -90,11 +95,18 @@ function start({ keys, allowed, handlers, onAgent = () => {}, port = PORT }) {
       // so send the headers now and a space every 25 s - spaces before JSON are still valid JSON.
       res.writeHead(200, { 'Content-Type': 'application/json' });
       const beat = setInterval(() => res.write(' '), 25000);
-      const replies = (await Promise.all(msgs.map((x) => rpc(x, list, opts)))).filter(Boolean);
+      const replies = await Promise.all(msgs.map((x) => rpc(x, list, opts)));
       clearInterval(beat);
-      return res.end(JSON.stringify(Array.isArray(body) ? replies : replies[0]));
+      msgs.forEach((x, i) => {
+        const r = replies[i];
+        const tool = x && x.method === 'tools/call' ? (x.params && x.params.name) || '?' : null;
+        onCall({ scope, tool, ok: !!r && !r.error && !(r.result && r.result.isError), ms: Date.now() - t0 });
+      });
+      const answers = replies.filter(Boolean);
+      return res.end(JSON.stringify(Array.isArray(body) ? answers : answers[0]));
     }
     const r = await route(req.method, req.url, body, scope);
+    onCall({ scope, tool: `${req.method} ${req.url.split('?')[0]}`, ok: r.status < 400, ms: Date.now() - t0 });
     return send(r.status, r.body);
   });
   server.listen(port, '127.0.0.1');
