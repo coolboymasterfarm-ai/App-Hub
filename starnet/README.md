@@ -21,25 +21,31 @@ this PC that have its key.
 
 ## Set it up (one time, about 5 minutes)
 
-**1. Get App Hub 1.5 or newer.** Double-click `Update.bat`. In App Hub, open **Settings** and find the
+**1. Get App Hub 1.7 or newer.** Double-click `Update.bat`. In App Hub, open **Settings** and find the
 **Starnet & agents** card. If Starnet is installed, the card has an **Open Starnet** button.
 
-**2. Add App Hub to Starnet.**
+**2. Add App Hub's apps to Starnet: one connector per app.** Each app has its own address and its own key,
+so you choose which apps your agents get. A ClipForge key can't touch AI Models, and you can switch one
+connector off in Starnet without touching the others.
 1. In Starnet, go to **CONNECT → ABILITIES → CONNECTED SERVICES → ADD A CONNECTOR**.
-2. Fill in:
-   | Field | Value |
-   | --- | --- |
-   | id | `apphub` |
-   | label | `App Hub` |
-   | type | **HTTP** |
-   | URL | `http://127.0.0.1:8770/mcp` (App Hub's **Copy** button next to "Connector address") |
-   | bearer token | your key (App Hub's **Copy** button next to "Key") |
-   | advanced → timeout ms | `600000` |
-3. Click **+ ADD & CONNECT**. Starnet should say **connected — 18 tool(s)**. In App Hub, the card now says
-   **● Connected: Starnet**.
+2. Add a connector for each app you want. Copy each address and key from that app's row in App Hub
+   (**Address** and **Key** buttons):
+   | App | id | URL | bearer token |
+   | --- | --- | --- | --- |
+   | ClipForge | `clipforge` | `http://127.0.0.1:8770/mcp/clipforge` | ClipForge's key (`ahk_cl_…`) |
+   | AI Models | `aimodels` | `http://127.0.0.1:8770/mcp/models` | AI Models' key (`ahk_mo_…`) |
+   | Other Apps | `otherapps` | `http://127.0.0.1:8770/mcp/apps` | Other Apps' key (`ahk_ap_…`) |
+
+   For each one, choose **HTTP**, set the label to the app's name, and set **advanced → timeout ms** to
+   `600000`.
+3. Click **+ ADD & CONNECT**. Starnet should say **connected** (ClipForge: 14 tools, AI Models: 4, Other
+   Apps: 2). In App Hub, that app's row now says **● Connected: Starnet**.
 
 The timeout matters: it lets one call wait up to 10 minutes while ClipForge finishes a video. The default is
 2 minutes.
+
+Prefer a single connector for everything? Use the **All apps** row instead: id `apphub`, URL
+`http://127.0.0.1:8770/mcp`, and the all-apps key. Connectors you set up before version 1.7 keep working.
 
 **3. Teach your agents how (the skill).** In Starnet, go to **CONNECT → ABILITIES → SKILL EXCHANGE →
 IMPORT EXPORTED PACKAGE** and pick `starnet/app-hub-clipforge.starnet-skill.json` from this repo. Then click
@@ -60,7 +66,7 @@ you download in App Hub shows up in Starnet.
 ## Use it
 
 **Chat.** Tell an agent: *"Clip this video with App Hub: https://youtube.com/watch?v=… and send me the best 3."*
-The first time, Starnet asks you to allow the App Hub connector. Choose **Always** if you trust it.
+The first time, Starnet asks you to allow the ClipForge connector. Choose **Always** if you trust it.
 
 Every clip comes back with a **ready-to-post caption** (with hashtags), why it was picked, what's said in it, and
 its video and cover files. Your agent can write posts from that with no extra App Hub calls. Several links, one
@@ -70,7 +76,7 @@ per line, are clipped in the same call.
 - **Name**: Morning clips
 - **Agent**: the agent with the skill
 - **What should it do?**:
-  > Use the App Hub connector. Make exactly ONE call to mcp__apphub__clipforge_make_clips with input
+  > Use the ClipForge connector. Make exactly ONE call to mcp__clipforge__make_clips with input
   > "https://www.youtube.com/@yourchannel", newest true, wait_minutes 9, skip_if_done true,
   > send_to_starnet "agent", best 3. Then list the clips best first: hook title, length, score and path.
 - **When**: `0 9 * * *` (every day at 9:00)
@@ -89,37 +95,41 @@ WORKFLOWS**, open a line and add a folder trigger ("when a file lands in a folde
 a task such as *"Write a TikTok caption and 5 hashtags for each clip in this note."* The note has every
 clip's hook title, length, score and file path.
 
-## Reset the key
+## Reset a key
 
-In App Hub, go to **Settings → Starnet & agents → Reset key**. The old key stops working at once, and the new
-one is copied for you. Then in Starnet: **CONNECTED SERVICES → App Hub → ✎ EDIT**, paste the new key into
-**bearer token**, and click **SAVE & RECONNECT**. Claude Code needs no change: its connector reads the
-current key from App Hub.
+In App Hub, go to **Settings → Starnet & agents** and click **Reset** on that app's row. Its old key stops
+working at once, the other apps' keys keep working, and the new key is copied for you. Then in Starnet:
+**CONNECTED SERVICES → that connector → ✎ EDIT**, paste the new key into **bearer token**, and click **SAVE &
+RECONNECT**. Claude Code needs no change: its connectors read the current keys from App Hub.
 
-To stop agents using one app without changing the key, switch it off in the same card (ClipForge, AI Models,
-Your apps). Agents then get "switched off" instead.
+To stop agents using one app without changing its key, switch it off on its row. Agents then get "switched
+off" instead.
 
 ## What the tools are
 
+ClipForge connector (in Starnet: `mcp__clipforge__<tool>`):
+
 | Tool | What it does |
 | --- | --- |
-| `clipforge_make_clips` | The main one. One or more links, a channel's newest upload (`newest`) or files → clips with ready-to-post captions. It can wait (`wait_minutes`), skip videos it already did (`skip_if_done`) and copy the best clips into an agent's folder, sized for Telegram (`send_to_starnet`, `best`). |
-| `clipforge_wait_for_video` | Wait for or check a video by id, and optionally send its clips to Starnet. |
-| `clipforge_list_videos`, `clipforge_get_video`, `clipforge_transcript` | See videos, their clips and the transcript. |
-| `clipforge_make_clip`, `clipforge_edit_clip`, `clipforge_title_ideas`, `clipforge_rerender_all` | Cut your own clip, change a title, timing or captions, get title ideas, and re-render. |
-| `clipforge_styles`, `clipforge_get_settings`, `clipforge_set_settings` | HyperFrames caption styles, transitions, motion graphics, clip count and length. |
-| `clipforge_job` | Progress of one job. |
-| `models_overview`, `models_download`, `models_use` | This PC's hardware and AI models: download one, and switch ClipForge to it. |
-| `app_hub_status` | Can clips be made right now (`ready_to_clip`), what to fix if not, and videos in progress. |
-| `apps_list` | Your own apps in App Hub. |
+| `make_clips` | The main one. One or more links, a channel's newest upload (`newest`) or files → clips with ready-to-post captions. It can wait (`wait_minutes`), skip videos it already did (`skip_if_done`) and copy the best clips into an agent's folder, sized for Telegram (`send_to_starnet`, `best`). |
+| `wait_for_video` | Wait for or check a video by id, and optionally send its clips to Starnet. |
+| `list_videos`, `get_video`, `transcript` | See videos, their clips and the transcript. |
+| `make_clip`, `edit_clip`, `title_ideas`, `rerender_all` | Cut your own clip, change a title, timing or captions, get title ideas, and re-render. |
+| `styles`, `get_settings`, `set_settings` | HyperFrames caption styles, transitions, motion graphics, clip count and length. |
+| `job` | Progress of one job. |
+| `status` | Can clips be made right now (`ready_to_clip`), what to fix if not, and videos in progress. |
 
-In Starnet, every tool name starts with `mcp__apphub__`.
+AI Models connector (`mcp__aimodels__<tool>`): `overview` (this PC's hardware and models), `download`, `use`,
+`status`. Other Apps connector (`mcp__otherapps__<tool>`): `list` (the apps you added), `status`.
+
+With one **All apps** connector, the names carry the app in front instead: `mcp__apphub__clipforge_make_clips`,
+`mcp__apphub__models_download`, `mcp__apphub__apps_list`, `mcp__apphub__app_hub_status`.
 
 ## Good to know (Starnet's safety rules)
 
 - **One App Hub call per scheduled run.** After a schedule (or Telegram) run gets its first answer from a
-  connector, Starnet blocks further connector calls in that run. That's why `clipforge_make_clips` can do
-  the whole job in one call. In a chat you're watching, Starnet asks you before each extra call instead.
+  connector, Starnet blocks further calls to *any* connector in that run (separate connectors per app don't
+  change this). That's why `make_clips` can do the whole job in one call. In a chat you're watching, Starnet asks you before each extra call instead.
 - **Long videos.** One call waits up to 9½ minutes. If a video takes longer, the answer says "still
   working" with its id. The next run picks it up with `skip_if_done` or `clipforge_wait_for_video`.
 - **Getting video files on Telegram.** Starnet sends files only from an agent's own folder, and only up
@@ -135,7 +145,8 @@ In Starnet, every tool name starts with `mcp__apphub__`.
 | You see | Do this |
 | --- | --- |
 | Starnet: "saved, but not connected" | Is App Hub open? Check the URL ends in `/mcp` and the key was pasted whole (starts with `ahk_`). |
-| "Missing or wrong API key" | The key was reset. Paste the new one into Starnet (see **Reset the key**). |
+| "Missing or wrong API key" | The key was reset. Paste the new one into Starnet (see **Reset a key**). |
+| "This key is not for ClipForge" | That connector has another app's key. Paste the key from the right app's row. |
 | "App Hub only accepts requests from programs on this PC" | Use `127.0.0.1`, not your PC's network name or IP address. |
 | "ClipForge is stopped / starting" | Open App Hub's ClipForge page. If it's not installed, click Install on App Hub's Home page. |
 | "Agent access to clipforge is switched off" | Turn the switch back on in App Hub Settings. |

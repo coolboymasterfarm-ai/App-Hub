@@ -1,7 +1,16 @@
 // App Hub's tools for AI agents, shared by both connectors:
-//   - POST /mcp on the App Hub API (src/agentapi.js) - what Starnet connects to (MCP over HTTP)
+//   - POST /mcp and /mcp/<app> on the App Hub API (src/agentapi.js) - what Starnet connects to (MCP over HTTP)
 //   - mcp.js over stdio - what Claude Code / Claude Desktop launch
 // api(method, path, body) calls the App Hub API and throws an Error with a plain reason on failure.
+// Each app is also its own connector (forApp): only its tools, without the app's name in front
+// (ClipForge's make_clips instead of clipforge_make_clips), so one key and one connector per app.
+
+// The apps agents can use: the tool-name prefix each one's tools carry in the all-apps connector.
+const APPS = {
+  clipforge: { title: 'ClipForge', prefix: 'clipforge_' },
+  models: { title: 'AI Models', prefix: 'models_' },
+  apps: { title: 'Other Apps', prefix: 'apps_' },
+};
 
 const str = (description) => ({ type: 'string', description });
 const num = (description) => ({ type: 'number', description });
@@ -11,7 +20,7 @@ const READ = { readOnlyHint: true };
 
 // Starnet lets an unattended run make ONE connector call, so the main tool can do the whole job in one go.
 const WAIT = num('Minutes to wait for the clips to be finished (0-9.5). Use 9 in Starnet so one call does the whole job; ' +
-  'set the connector timeout to 600000. If it is not finished in time you get the id - call clipforge_wait_for_video later.');
+  'set the connector timeout to 600000. If it is not finished in time you get the id - call the wait_for_video tool later.');
 const SEND = str('Optional: a Starnet agent id (e.g. "agent"). The finished clips and covers are copied into that agent\'s ' +
   'Starnet folder (clipforge/<video id>/) so it can open or send them; clips over 20 MB get a smaller copy that fits Telegram.');
 const BEST = num('Only the best N clips (default all): in the answer, and in what send_to_starnet copies');
@@ -56,7 +65,7 @@ function tools(api) {
       (a) => api('POST', `/v1/clipforge/projects/${enc(a.id)}/clips/${a.n}/titles`)],
     ['clipforge_rerender_all', 'Re-render every clip of a video with the current settings.', obj({ id: str('Video id') }, ['id']), {},
       (a) => api('POST', `/v1/clipforge/projects/${enc(a.id)}/rerender_all`)],
-    ['clipforge_styles', 'The HyperFrames choices: caption styles and shader transitions (values for clipforge_set_settings).', obj({}), READ,
+    ['clipforge_styles', 'The HyperFrames choices: caption styles and shader transitions (values for the set_settings tool).', obj({}), READ,
       () => api('GET', '/v1/clipforge/options')],
     ['clipforge_get_settings', 'ClipForge settings: clip count/length, caption style and position, hook style, transitions, ' +
       'motion graphics, music, AI model...', obj({}), READ, () => api('GET', '/v1/clipforge/settings')],
@@ -73,13 +82,35 @@ function tools(api) {
     ['models_use', 'Switch ClipForge to an installed model.', obj({ kind: str('ollama or whisper'), id: str('Model id') }, ['kind', 'id']), {},
       (a) => api('POST', '/v1/models/use', a)],
     ['apps_list', "The user's own apps in App Hub (name and address).", obj({}), READ, () => api('GET', '/v1/apps')],
-  ].map(([name, description, inputSchema, annotations, run]) => ({ name, description, inputSchema, annotations, run }));
+  ].map(([name, description, inputSchema, annotations, run]) => ({
+    name, description, inputSchema, annotations, run,
+    app: Object.keys(APPS).find((a) => name.startsWith(APPS[a].prefix)) || 'hub', // 'hub': app_hub_status, in every connector
+  }));
+}
+
+// One app's connector: its tools plus status, named without the app's prefix.
+function forApp(list, app) {
+  return list.filter((t) => t.app === app || t.app === 'hub')
+    .map((t) => ({ ...t, name: t.app === 'hub' ? 'status' : t.name.slice(APPS[app].prefix.length) }));
+}
+
+// What a connector tells the agent when it connects.
+function instructions(app) {
+  if (app === 'clipforge') {
+    return 'ClipForge on this PC: AI clips from videos. make_clips with wait_minutes 9 does a whole video in one call - ' +
+      'on a schedule, make only that call. If clips cannot be made, status says what to fix.';
+  }
+  if (app) return `${APPS[app].title} in App Hub on this PC.`;
+  return 'App Hub runs ClipForge (AI clips from videos) and AI models on this PC. clipforge_make_clips with ' +
+    'wait_minutes 9 does a whole video in one call - on a schedule, make only that call. If clips cannot be made, ' +
+    'app_hub_status says what to fix.';
 }
 
 // One JSON-RPC message in, the reply out (null for notifications, which get no reply).
 // Tool failures are results with isError, never protocol errors: a client like Starnet counts protocol
 // errors against the connector and drops it after three, but shows isError text to the agent.
-async function rpc(msg, list, onInit) {
+// opts: { onInit(clientInfo), instructions }
+async function rpc(msg, list, { onInit, instructions: text = instructions() } = {}) {
   const { id, method, params } = msg || {};
   const ok = (result) => ({ jsonrpc: '2.0', id, result });
   const fail = (code, message) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
@@ -88,10 +119,7 @@ async function rpc(msg, list, onInit) {
   if (method === 'initialize') {
     if (onInit) onInit(params?.clientInfo);
     return ok({ protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'app-hub', title: 'App Hub', version: '1.5.0' },
-      instructions: 'App Hub runs ClipForge (AI clips from videos) and AI models on this PC. clipforge_make_clips with ' +
-        'wait_minutes 9 does a whole video in one call - on a schedule, make only that call. If clips cannot be made, ' +
-        'app_hub_status says what to fix.' });
+      serverInfo: { name: 'app-hub', title: 'App Hub', version: '1.7.0' }, instructions: text });
   }
   if (method === 'ping') return ok({});
   if (method === 'tools/list') {
@@ -110,4 +138,4 @@ async function rpc(msg, list, onInit) {
   return fail(-32601, 'Method not found: ' + method);
 }
 
-module.exports = { tools, rpc };
+module.exports = { tools, forApp, instructions, rpc, APPS };

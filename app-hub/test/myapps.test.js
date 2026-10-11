@@ -63,3 +63,13 @@ test('myApps finds the programs and addresses on this PC', () => {
   assert.strictEqual(myApps(env).freellmapi.url(), 'http://127.0.0.1:31415/');
   fs.rmSync(home, { recursive: true, force: true });
 });
+
+test('tail: the end of a big log, whole small files, empty for a missing one', () => {
+  const { tail } = require('../src/myapps');
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tail-')), 'startup.log');
+  fs.writeFileSync(f, 'old line\n'.repeat(1000) + 'spawn_sidecar pid=1 port=4321 listening=true\n');
+  assert.match(tail(f, 100), /port=4321/);
+  assert.strictEqual(tail(f, 100).length, 100);
+  assert.strictEqual(tail(f), fs.readFileSync(f, 'utf8'));
+  assert.strictEqual(tail(f + '.nope'), '');
+});

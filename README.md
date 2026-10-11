@@ -78,18 +78,23 @@ The files land in `app-hub\dist\`.
 Your [Starnet](https://github.com/androoAGI/starnet) crew can use App Hub's apps as tools. They can clip a video
 (or a channel's newest upload) in one call, wait for it, copy the best clips into their own folder, change
 HyperFrames styles, and download models. That works from a chat, a schedule, Telegram or a work line. Only
-programs on your PC can connect, and they need your key.
+programs on your PC can connect, and they need a key.
+
+**One connector and one key per app.** ClipForge, AI Models and Other Apps each have their own address
+(`http://127.0.0.1:8770/mcp/clipforge`, `/mcp/models`, `/mcp/apps`) and their own key, so an agent only gets
+the apps you give it. An **All apps** connector (`/mcp`, with its own key) is there if you'd rather use one.
 
 **Set up and examples: [starnet/README.md](starnet/README.md).** In short:
-1. In App Hub, go to **Settings → Starnet & agents** and copy the connector address
-   (`http://127.0.0.1:8770/mcp`) and the key.
-2. In Starnet, go to **CONNECT → ABILITIES → CONNECTED SERVICES → ADD A CONNECTOR**. Use id `apphub`, type
-   **HTTP**, paste both, set timeout ms to `600000`, then click **+ ADD & CONNECT**.
+1. In App Hub, go to **Settings → Starnet & agents**. Each app's row has **Address**, **Key** and **Reset**.
+2. In Starnet, go to **CONNECT → ABILITIES → CONNECTED SERVICES → ADD A CONNECTOR**. Add one per app (id
+   `clipforge`, `aimodels`, `otherapps`), type **HTTP**, paste that app's address and key, set timeout ms to
+   `600000`, then click **+ ADD & CONNECT**.
 3. Import the skill (`starnet/app-hub-clipforge.starnet-skill.json`) and the three recipes (`starnet/recipes/`).
 
-**Reset key** makes a new key and copies it for you; paste it into Starnet's connector (**✎ EDIT**). For Claude
-Code, click **Copy config** and paste it into `.mcp.json`; it keeps working after a key reset. Scripts can use
-the same API: `http://127.0.0.1:8770/v1/...` with `Authorization: Bearer <key>`, starting with `GET /v1/status`.
+**Reset** on a row makes a new key for that app only and copies it for you; paste it into that Starnet
+connector (**✎ EDIT**). For Claude Code, click **Copy config** (one server per app) and paste it into
+`.mcp.json`; it keeps working after a key reset. Scripts can use the same API:
+`http://127.0.0.1:8770/v1/...` with `Authorization: Bearer <key>`, starting with `GET /v1/status`.
 
 ## Where things live (installed .exe)
 

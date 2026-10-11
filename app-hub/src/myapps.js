@@ -9,6 +9,16 @@ const exists = (p) => !!p && fs.existsSync(p);
 const first = (list) => list.find(exists) || null;
 const readText = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
 const readJson = (f) => { try { return JSON.parse(readText(f)); } catch { return {}; } };
+// The last part of a log that only grows (StarNet's startup.log): the newest lines are all we need.
+function tail(f, bytes = 1 << 20) {
+  let fd;
+  try {
+    fd = fs.openSync(f, 'r');
+    const size = fs.fstatSync(fd).size, n = Math.min(size, bytes), buf = Buffer.alloc(n);
+    fs.readSync(fd, buf, 0, n, size - n);
+    return buf.toString('utf8');
+  } catch { return ''; } finally { if (fd !== undefined) fs.closeSync(fd); }
+}
 
 // StarNet's desktop app starts its server on a new port every time and writes it to startup.log.
 function starnetPort(log) {
@@ -57,7 +67,7 @@ function myApps(env = process.env) {
       name: 'StarNet', icon: 'bot', note: 'Your AI agent crew: belts, schedules and research.',
       exe: first([path.join(dl, 'starnet', 'skynet-desktop.exe'), path.join(local, 'Programs', 'StarNet', 'skynet-desktop.exe')]),
       shortcuts: shortcuts('StarNet', env),
-      url: () => { const p = starnetPort(readText(path.join(appdata, 'ai.skynet.harness', 'startup.log'))); return p ? `http://127.0.0.1:${p}/` : null; },
+      url: () => { const p = starnetPort(tail(path.join(appdata, 'ai.skynet.harness', 'startup.log'))); return p ? `http://127.0.0.1:${p}/` : null; },
     },
     freellmapi: {
       name: 'FreeLLMAPI', icon: 'spark', note: 'Free AI models behind one local address.',
@@ -76,4 +86,4 @@ function myApps(env = process.env) {
   };
 }
 
-module.exports = { myApps, starnetPort, shortcuts, findNode, npmBin };
+module.exports = { myApps, starnetPort, shortcuts, findNode, npmBin, tail };

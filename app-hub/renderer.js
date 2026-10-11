@@ -64,7 +64,10 @@ function show(id) {
   if (!PAGES[id] && !tabApp(id)) id = 'home';
   page = id;
   const isApp = !PAGES[id];
+  const fresh = isApp && !open.has(id); // a new tab needs a sidebar entry; otherwise the .on toggle below is enough
   if (isApp) open.add(id);
+  // ClipForge's page stays loaded; tell it to stop polling while it's off screen
+  if (cfLoaded) $('cf-frame').contentWindow.postMessage({ cfHidden: id !== 'clipforge' }, cf.url);
   for (const p of document.querySelectorAll('.page')) p.classList.toggle('on', p.id === 'page-' + (isApp ? 'app' : id));
   for (const n of document.querySelectorAll('.nav')) n.classList.toggle('on', n.dataset.page === id);
   $('tb-title').hidden = isApp;
@@ -76,7 +79,7 @@ function show(id) {
   if (id === 'clipforge') paintCf();
   hub.show(id);
   if (id.startsWith('my-') && !tabs.has(id)) startMine(id); // its view opens once its program answers
-  renderSide();
+  if (fresh) renderSide();
   paintTab();
   sendRect();
 }
@@ -108,12 +111,16 @@ function closeTab(id) {
 }
 
 // The app pages are native views laid over <main>; tell the main process where <main> is.
+// Only when it moved: every rect makes the main process lay out the native views again.
+let lastRect = '';
 function sendRect() {
   const r = $('main').getBoundingClientRect();
+  const k = [r.left, r.top, r.width, r.height].join();
+  if (k === lastRect) return;
+  lastRect = k;
   hub.rect({ x: r.left, y: r.top, width: r.width, height: r.height });
 }
 new ResizeObserver(sendRect).observe($('main'));
-window.addEventListener('resize', sendRect);
 
 document.querySelectorAll('.nav[data-page]').forEach((n) => { n.onclick = () => show(n.dataset.page); });
 
@@ -270,7 +277,8 @@ function loadHome() {
     const gpu = hw.gpus[0];
     $('stat-pc-text').textContent = `${hw.ramGB} GB RAM · ${gpu ? gpu.name.replace(/^NVIDIA |GeForce /g, '') : 'no graphics card found'}`;
   }).catch(() => { $('stat-pc-text').textContent = 'Could not check'; });
-  hub.models().then((m) => { models = m; paintAiStat(); }).catch(() => {});
+  if (models) paintAiStat(); // the Models page keeps this up to date
+  else hub.models().then((m) => { models = m; paintAiStat(); }).catch(() => {});
 }
 
 function paintAiStat() {
@@ -377,7 +385,15 @@ hub.onInstallLog(({ id, line }) => {
   if (logs[id].length > 500) logs[id].shift();
   const last = $('last-' + id), pre = $('log-' + id);
   if (last) last.textContent = line;
-  if (pre) { pre.textContent = logs[id].join('\n'); pre.parentElement.hidden = false; pre.scrollTop = pre.scrollHeight; }
+  // installers print many lines a second: draw the log at most once a frame
+  if (pre && !pre.raf) {
+    pre.raf = requestAnimationFrame(() => {
+      pre.raf = 0;
+      pre.textContent = logs[id].join('\n');
+      pre.parentElement.hidden = false;
+      pre.scrollTop = pre.scrollHeight;
+    });
+  }
 });
 
 // ---------------------------------------------------------------- ClipForge
@@ -386,6 +402,7 @@ let cfLoaded = false;   // the frame shows a running ClipForge
 let cfPending = '';     // a project to open once it's ready
 
 hub.onCfState((s) => {
+  if (JSON.stringify(s) === JSON.stringify(cf)) return; // nothing changed: don't rebuild cards under the mouse
   const wasReady = cf.state === 'ready';
   cf = s;
   if (wasReady && s.state !== 'ready') cfLoaded = false; // it went away; reload the frame when it's back
@@ -438,8 +455,8 @@ function modelRow(m, data) {
       m.recommended && el('span', { className: 'badge rec' }, icon('spark'), 'Recommended'),
       m.inUse && el('span', { className: 'badge use' }, icon('check'), 'In use')),
     el('div', { className: 'note', textContent: m.note }));
-  if (b) name.append(el('div', { className: 'note', textContent: b.text || 'starting…' }),
-    el('div', { className: 'bar' }, el('i', { style: `width:${Math.round((b.pct || 0) * 100)}%` })));
+  if (b) name.append(el('div', { className: 'note', id: 'prog-' + key, textContent: b.text || 'starting…' }),
+    el('div', { className: 'bar' }, el('i', { id: 'bar-' + key, style: `width:${Math.round((b.pct || 0) * 100)}%` })));
   const acts = el('div', { className: 'acts' });
   const canGet = m.kind === 'ollama' ? data.ollama : data.cfReady;
   if (m.installed) {
@@ -518,8 +535,12 @@ async function setupRecommended() {
 
 hub.onProgress((p) => {
   if (!busy.has(p.kind + ':' + p.id) || p.text === 'done' || p.text === 'failed') return;
-  busy.set(p.kind + ':' + p.id, { text: p.text, pct: p.pct });
-  if (models && page === 'models') renderModels(models);
+  const key = p.kind + ':' + p.id;
+  busy.set(key, { text: p.text, pct: p.pct });
+  // many events a second during a download: update its row, not the whole page (buttons keep working)
+  const t = document.getElementById('prog-' + key), b = document.getElementById('bar-' + key);
+  if (t && b) { t.textContent = p.text; b.style.width = Math.round((p.pct || 0) * 100) + '%'; }
+  else if (models && page === 'models') renderModels(models);
 });
 
 $('refresh').onclick = loadModels;
@@ -534,20 +555,48 @@ $('ollama-btn').onclick = async () => {
 
 // ---------------------------------------------------------------- Settings
 
-let agent = null, keyShown = false;
+let agent = null, settingsNow = {}, keyShown = false;
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(t).toLocaleString(); };
+const seenText = (a) => a && el('span', { className: 'ok-dot' }, `● Connected: ${a.name}, ${ago(a.at)}`);
+const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''] };
+const CONN_NOTE = {
+  all: 'Every app below in one connector.',
+  clipforge: 'Make clips, wait for them, send them to Starnet, transcripts, edits, HyperFrames styles.',
+  models: "This PC's hardware and models: download and switch models.",
+  apps: 'The list of apps you added (read only).',
+};
+// One row per connector: its address and key to paste into Starnet, Reset, and (per app) the on/off switch.
+function connRow(c) {
+  const [ico, cls] = CONN_ICON[c.scope];
+  const reset = async () => {
+    if (!confirm(`Make a new key for ${c.title}? Agents using the old one stop reaching it until you paste the new key into them ` +
+      '(Starnet: CONNECTED SERVICES → that connector → ✎ EDIT → bearer token → SAVE & RECONNECT).')) return;
+    keyShown = true;
+    paintAgent(await hub.set({ resetKey: c.scope }));
+    copyText(agent.connectors.find((x) => x.scope === c.scope).key, 'New key made and copied - paste it into Starnet');
+  };
+  const sw = c.sw && el('label', { className: 'sw' }, el('input', { type: 'checkbox', checked: !!settingsNow[c.sw], ariaLabel: `Let agents use ${c.title}`,
+    onchange: (e) => hub.set({ [c.sw]: e.target.checked }) }), el('i'));
+  return el('div', { className: 'srow' }, el('span', { className: 'sico' + cls }, icon(ico)),
+    el('span', { className: 'stext' }, el('b', {}, c.title),
+      el('span', {}, CONN_NOTE[c.scope]),
+      el('span', { className: 'mono' }, `Starnet id ${c.id} · ${c.url}`),
+      el('span', { className: 'mono' }, 'Key ' + (keyShown ? c.key : c.key.slice(0, 8) + '•'.repeat(16))),
+      seenText(agent.lastAgent[c.scope])),
+    btn('ghost sm', 'Address', () => copyText(c.url, `${c.title} address copied - paste it into the URL box in Starnet`)),
+    btn('ghost sm', 'Key', () => copyText(c.key, `${c.title} key copied - paste it into "bearer token" in Starnet`)),
+    btn('ghost sm danger', 'Reset', reset), sw);
+}
 function paintSeen() {
-  const a = agent.lastAgent;
-  $('agent-seen').innerHTML = '';
-  $('agent-seen').append(a
-    ? Object.assign(document.createElement('span'), { className: 'ok-dot', textContent: `● Connected: ${a.name}, ${ago(a.at)}` })
-    : agent.starnet ? 'Found on this PC, not connected yet. Follow the steps below.' : 'Not found on this PC. Install Starnet, then follow the steps below.');
+  const last = Object.values(agent.lastAgent).sort((a, b) => b.at - a.at)[0];
+  $('agent-seen').replaceChildren(seenText(last)
+    || (agent.starnet ? 'Found on this PC, not connected yet. Follow the steps below.' : 'Not found on this PC. Install Starnet, then follow the steps below.'));
 }
 function paintAgent(info) {
   agent = info.agent;
-  $('agent-key').textContent = keyShown ? agent.key : agent.key.slice(0, 8) + '•'.repeat(24);
-  $('agent-show').textContent = keyShown ? 'Hide' : 'Show';
-  $('agent-mcpurl').textContent = agent.mcpUrl;
+  settingsNow = info.settings;
+  $('agent-show').textContent = keyShown ? 'Hide keys' : 'Show keys';
+  $('agent-conns').replaceChildren(...agent.connectors.map(connRow));
   $('agent-drop').textContent = agent.dropDir;
   $('agent-open').hidden = !agent.starnetApp;
   $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;
@@ -556,19 +605,10 @@ function paintAgent(info) {
 }
 const copyText = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Could not copy'));
 $('agent-show').onclick = () => { keyShown = !keyShown; hub.info().then(paintAgent); };
-$('agent-copy').onclick = () => copyText(agent.key, 'Key copied - paste it into "bearer token" in Starnet');
-$('agent-copyurl').onclick = () => copyText(agent.mcpUrl, 'Address copied - paste it into the URL box in Starnet');
 $('agent-copytimeout').onclick = () => copyText('600000', 'Copied 600000');
 $('agent-mcp').onclick = () => copyText(JSON.stringify(agent.mcp, null, 2), 'MCP config copied - paste it into .mcp.json');
-$('agent-new').onclick = async () => {
-  if (!confirm('Reset the key? Starnet and other agents stop reaching App Hub until you paste the new key into them ' +
-    '(Starnet: CONNECTED SERVICES → App Hub → ✎ EDIT → bearer token → SAVE & RECONNECT).')) return;
-  keyShown = true;
-  paintAgent(await hub.set({ newAgentKey: true }));
-  copyText(agent.key, 'New key made and copied - paste it into Starnet');
-};
 document.querySelectorAll('[data-agent]').forEach((b) => { b.onchange = () => hub.set({ [b.dataset.agent]: b.checked }); });
-hub.onAgentSeen((a) => { if (agent) { agent.lastAgent = a; paintSeen(); } });
+hub.onAgentSeen((seen) => { if (agent) { agent.lastAgent = seen; hub.info().then(paintAgent); } });
 
 async function loadSettings() {
   const info = await hub.info();
@@ -594,7 +634,8 @@ document.querySelectorAll('[data-open]').forEach((b) => {
 // ---------------------------------------------------------------- start
 
 (async () => {
-  [apps, cf, installs, mine] = await Promise.all([hub.apps(), hub.cfState(), hub.installState(), hub.mineState()]);
+  // only the instant calls before the first draw; Home fills in My Apps and installs as they answer
+  [apps, cf] = await Promise.all([hub.apps(), hub.cfState()]);
   renderSide();
   show('home');
 })();
