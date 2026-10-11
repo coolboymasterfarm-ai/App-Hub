@@ -8,6 +8,7 @@ const models = require('./src/models');
 const apps = require('./src/apps');
 const agentapi = require('./src/agentapi');
 const starnet = require('./src/starnet');
+const sleep = require('./src/sleep');
 
 const PORT = 8765;
 const WIN = process.platform === 'win32';
@@ -369,6 +370,19 @@ let viewRect = null;    // where app pages go, measured by the hub page (it owns
 let covered = false;    // a hub dialog is open - native views would paint over it
 const views = new Map(); // app id -> WebContentsView
 const failed = new Map(); // app id -> { text, url } of a page that would not load
+// Each open app is a whole web page in memory. Apps not looked at for a while go to sleep (closed, RAM freed)
+// and come back at the same address when clicked. Apps playing sound stay awake.
+const lastSeen = new Map(); // app id -> when it was last shown
+const asleep = new Map();   // app id -> the address it was on
+function sleepTabs() {
+  const ids = sleep.toSleep([...views.keys()], { shown: page, lastSeen, now: Date.now(),
+    audible: (id) => views.get(id).webContents.isCurrentlyAudible() });
+  for (const id of ids) {
+    const url = views.get(id).webContents.getURL();
+    closeView(id);
+    if (/^(https?|file):/i.test(url)) asleep.set(id, url);
+  }
+}
 
 // Back/forward use webContents.canGoBack() etc., not webContents.navigationHistory: in Electron 31
 // navigationHistory.canGoBack() never returns while a page is still loading, and freezes the app.
@@ -392,8 +406,11 @@ function tabState(id) {
 }
 
 function showPage(id) {
+  if (page && views.has(page)) lastSeen.set(page, Date.now()); // the page being left was seen until now
   page = id;
+  lastSeen.set(id, Date.now());
   if (id && id.startsWith('app-') && !views.has(id)) openView(id);
+  sleepTabs();
   layout();
   tabState(id);
 }
@@ -425,7 +442,8 @@ function openView(id) {
   hookKeys(wc);
   win.contentView.addChildView(v);
   views.set(id, v);
-  wc.loadURL(a.url).catch(() => {}); // failures arrive as did-fail-load
+  wc.loadURL(asleep.get(id) || a.url).catch(() => {}); // failures arrive as did-fail-load
+  asleep.delete(id);
 }
 
 function closeView(id) {
@@ -435,6 +453,7 @@ function closeView(id) {
   v.webContents.close();
   views.delete(id);
   failed.delete(id);
+  asleep.delete(id); // closing by hand forgets where it was
 }
 
 function navigate(id, action) {
@@ -767,6 +786,7 @@ app.whenReady().then(() => {
   startAgentApi();
   cfPoll();
   setInterval(cfPoll, 3000);
+  setInterval(sleepTabs, 60000);
 });
 app.on('before-quit', () => { if (server) server.kill(); });
 app.on('window-all-closed', () => app.quit());
