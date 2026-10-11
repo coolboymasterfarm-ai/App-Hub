@@ -1,7 +1,7 @@
 {
   "name": "app-hub",
   "productName": "App Hub",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Your apps in one window, with AI models picked for your PC.",
   "author": "Bryce",
   "main": "main.js",

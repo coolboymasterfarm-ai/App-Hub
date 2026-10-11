@@ -60,6 +60,9 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
 22. app_hub_status: ready_to_clip + ClipForge's doctor warnings + videos in progress. "Open Starnet" in Settings
     (only when its shortcut exists). Recipe: Clips + posts for my socials.
 
+23. Less RAM with many apps (1.5.1): app tabs not looked at for 10 min, or the oldest beyond 5 awake, go to sleep
+    (closed, src/sleep.js) and reopen at the same address when clicked. Tabs playing sound stay awake.
+
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
 .exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.
