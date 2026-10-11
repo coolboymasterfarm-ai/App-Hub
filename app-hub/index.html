@@ -172,6 +172,12 @@
               <button class="btn ghost" data-open="log"><svg class="i"><use href="#i-info"/></svg>ClipForge log</button>
               <button class="btn ghost" data-open="hub"><svg class="i"><use href="#i-folder"/></svg>App Hub data</button>
             </div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-trash"/></svg></span>
+              <span class="stext"><b>Free up space</b><span id="clean-text">Deletes finished videos and the clip copies sent to Starnet's agents.</span></span>
+              <select id="clean-days" aria-label="Which videos">
+                <option value="30">Older than 30 days</option><option value="7">Older than 7 days</option>
+                <option value="90">Older than 90 days</option><option value="0">All finished videos</option></select>
+              <button class="btn ghost sm danger" id="clean-go">Delete…</button></div>
             <p class="muted small" id="set-where"></p>
           </div>
           <div class="card set" id="agents">

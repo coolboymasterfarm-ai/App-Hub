@@ -618,6 +618,7 @@ async function loadSettings() {
   $('set-where').textContent = `ClipForge, its tools and models live in ${info.cfDir}`;
   $('about').textContent = `App Hub ${info.version}`;
   paintSetCf();
+  paintClean();
 }
 function paintSetCf() {
   const n = cf.projects.length;
@@ -627,6 +628,24 @@ function paintSetCf() {
 $('set-login').onchange = (e) => hub.set({ openAtLogin: e.target.checked }).then(() => toast(e.target.checked ? 'App Hub will start with Windows' : 'App Hub won\'t start with Windows'));
 $('set-notify').onchange = (e) => hub.set({ notifications: e.target.checked });
 $('set-cf-restart').onclick = () => { hub.cfRestart(); cf.state = 'starting'; paintSetCf(); paintCf(); toast('Restarting ClipForge…'); };
+// Free up space: shows what the choice would free, then deletes after a confirm.
+async function paintClean() {
+  const p = await hub.cleanPlan($('clean-days').value);
+  const what = [p.videos && `${p.videos} video${p.videos === 1 ? '' : 's'}`, p.copies && `${p.copies} Starnet cop${p.copies === 1 ? 'y' : 'ies'}`].filter(Boolean);
+  $('clean-text').textContent = what.length ? `${what.join(' and ')} · frees ${p.size}` : 'Nothing to delete for this choice.';
+  $('clean-go').disabled = !what.length;
+  return p;
+}
+$('clean-days').onchange = paintClean;
+$('clean-go').onclick = async () => {
+  const p = await paintClean();
+  if (!p.videos && !p.copies) return;
+  if (!confirm(`Delete ${$('clean-text').textContent.split(' · ')[0]} and free ${p.size}? This can't be undone.`)) return;
+  const r = await hub.cleanRun($('clean-days').value);
+  toast(`Deleted ${r.deleted} folder${r.deleted === 1 ? '' : 's'}, freed ${r.size}`, 4000);
+  paintClean();
+};
+
 document.querySelectorAll('[data-open]').forEach((b) => {
   b.onclick = async () => { const err = await hub.open(b.dataset.open); if (err) toast(err.includes('exist') ? 'Nothing there yet' : err, 3500); };
 });

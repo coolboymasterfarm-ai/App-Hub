@@ -207,6 +207,7 @@ h3 { font-size: 14px; }
 .srow { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); cursor: default; }
 .set h3 + .srow { border-top: none; }
 label.srow { cursor: pointer; }
+.srow select { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
 .sico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--panel2); color: var(--mut); flex: none; }
 .sico.cf { background: var(--cf-soft); color: var(--cf); }
 .stext { flex: 1; min-width: 0; display: flex; flex-direction: column; }

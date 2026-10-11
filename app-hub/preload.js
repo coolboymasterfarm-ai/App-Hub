@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('hub', {
   info: () => ipcRenderer.invoke('hub:info'),
   set: (patch) => ipcRenderer.invoke('hub:set', patch),
   open: (folder) => ipcRenderer.invoke('hub:open', folder),
+  cleanPlan: (days) => ipcRenderer.invoke('clean:plan', days),
+  cleanRun: (days) => ipcRenderer.invoke('clean:run', days),
   hardware: () => ipcRenderer.invoke('hub:hardware'),
   onShortcut: on('hub:shortcut'),
   onAgentSeen: on('agent:seen'),
