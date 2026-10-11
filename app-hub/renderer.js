@@ -26,7 +26,7 @@ function toast(msg, ms = 2600) {
 
 const PAGES = { home: 'Home', clipforge: 'ClipForge', models: 'AI Models', settings: 'Settings' };
 let apps = [];
-let mine = [];              // My Apps: StarNet, FreeLLMAPI, OmniRoute (ClipForge has its own page)
+let mine = [];              // My Apps: FreeLLMAPI, OmniRoute (ClipForge has its own page; StarNet uses its own window)
 const starting = new Set(); // My Apps being started right now
 const tabApp = (id) => mine.find((m) => m.id === id) || apps.find((a) => a.id === id);
 const open = new Set();     // user apps with a live tab
@@ -84,7 +84,7 @@ function show(id) {
   sendRect();
 }
 
-// Starts StarNet / FreeLLMAPI / OmniRoute (or finds it running), then opens its page in the tab.
+// Starts FreeLLMAPI / OmniRoute (or finds it running), then opens its page in the tab.
 async function startMine(id) {
   if (starting.has(id)) return;
   starting.add(id);
