@@ -88,6 +88,10 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     a bot token + chat ID the user saves in Settings > Starnet & agents (the bot Starnet uses works: App Hub only
     sends, never reads updates). Token checked before saving, kept in hub-settings.json, shown to the page masked.
     "Send test" button. Bryce enters the token himself.
+28. Keys (src/keylog.js): each connector key shows "Last used ..." and can expire (No expiry / 7 / 30 / 90 days / 1 year,
+    counted from when the key was made or Reset). An expired key gets a 401 that says how to make a new one.
+    "Recent agent calls": the last 50 calls (time, agent, key, tool or /v1 path, worked or failed, time taken),
+    saved in userData/agent-log.json.
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native

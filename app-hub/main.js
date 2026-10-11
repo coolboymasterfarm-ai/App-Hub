@@ -12,6 +12,7 @@ const sleep = require('./src/sleep');
 const myapps = require('./src/myapps');
 const cleanup = require('./src/cleanup');
 const telegram = require('./src/telegram');
+const keylog = require('./src/keylog');
 
 const PORT = 8765;
 const WIN = process.platform === 'win32';
@@ -157,8 +158,11 @@ function hubSettings() {
   try { s = { ...HUB_DEFAULTS, ...JSON.parse(fs.readFileSync(USER('hub-settings.json'), 'utf8')) }; }
   catch { s = { ...HUB_DEFAULTS }; }
   // agentKey reaches every app; appKeys.<app> only that app. Made on first start (and for apps added later).
-  const missing = !s.agentKey || CONNECTORS.some((c) => c.scope !== 'all' && !(s.appKeys || {})[c.scope]);
+  const missing = !s.agentKey || CONNECTORS.some((c) => (c.scope !== 'all' && !(s.appKeys || {})[c.scope]) || !(s.keyMade || {})[c.scope]);
   if (missing) {
+    // keyMade.<scope>: when that key was made (its expiry counts from then); keyDays.<scope>: how long it lives (0: always)
+    s.keyMade = { ...s.keyMade };
+    for (const c of CONNECTORS) if (!s.keyMade[c.scope]) s.keyMade[c.scope] = Date.now();
     s.agentKey = s.agentKey || agentapi.newKey();
     s.appKeys = { ...s.appKeys };
     for (const c of CONNECTORS) if (c.scope !== 'all' && !s.appKeys[c.scope]) s.appKeys[c.scope] = agentapi.newKey(c.scope);
@@ -185,7 +189,9 @@ function agentInfo(s) {
   const base = `http://127.0.0.1:${agentapi.PORT}`;
   return {
     url: base, lastAgent, starnet: starnet.workspaces(), starnetApp: !!starnet.shortcut(), dropDir: DROP_DIR(),
-    connectors: CONNECTORS.map((c) => ({ ...c, url: base + c.path, key: keys[c.scope] })),
+    connectors: CONNECTORS.map((c) => ({ ...c, url: base + c.path, key: keys[c.scope], lastUsed: agentLog.lastUsed[c.scope] || null,
+      days: (s.keyDays || {})[c.scope] || 0, expires: keylog.expiresAt((s.keyMade || {})[c.scope], (s.keyDays || {})[c.scope]) })),
+    calls: agentLog.calls,
     // runs the connector with App Hub's own Node; mcp.js reads the current key, APP_HUB_KEY is the fallback
     mcp: { mcpServers: Object.fromEntries(CONNECTORS.filter((c) => c.scope !== 'all').map((c) => [c.id, {
       command: process.execPath, args: [USER('mcp.js')],
@@ -206,6 +212,9 @@ function hubInfo() {
 function setHub(patch) {
   const s = hubSettings();
   for (const k of Object.keys(HUB_DEFAULTS)) if (k in patch) s[k] = !!patch[k];
+  if (patch.keyDays && CONNECTORS.some((c) => c.scope === patch.keyDays.scope) && keylog.DAYS.includes(Number(patch.keyDays.days))) {
+    s.keyDays = { ...s.keyDays, [patch.keyDays.scope]: Number(patch.keyDays.days) };
+  }
   if (patch.telegram) { // { token (empty: keep the saved one), chat } - checked before it's saved
     const token = String(patch.telegram.token || '').trim() || s.telegramToken, chat = String(patch.telegram.chat || '').trim();
     telegram.check(token, chat);
@@ -216,6 +225,7 @@ function setHub(patch) {
   if (reset) {
     if (reset.scope === 'all') s.agentKey = agentapi.newKey();
     else s.appKeys = { ...s.appKeys, [reset.scope]: agentapi.newKey(reset.scope) };
+    s.keyMade = { ...s.keyMade, [reset.scope]: Date.now() };
     delete lastAgent[reset.scope];
   }
   apps.save(USER('hub-settings.json'), s);
@@ -917,12 +927,27 @@ function dropForStarnet(id) {
   } catch (e) { console.error('Starnet note:', e.message); }
 }
 
+// Which key was last used when, and the last 50 calls agents made (Settings > Starnet & agents). Saved a moment
+// after a call, not on every one.
+let agentLog = keylog.clean(null);
+let logTimer = null;
+function logCall(c) {
+  agentLog = keylog.record(agentLog, { ...c, client: (lastAgent[c.scope] || {}).name });
+  clearTimeout(logTimer);
+  logTimer = setTimeout(() => { try { apps.save(USER('agent-log.json'), agentLog); } catch (e) { console.error('Agent log:', e.message); } }, 2000);
+  if (c.tool) send('agent:call', agentLog.calls[0]);
+}
+
 function startAgentApi() {
+  try { agentLog = keylog.clean(JSON.parse(fs.readFileSync(USER('agent-log.json'), 'utf8'))); } catch { /* first start */ }
   hubSettings(); // makes the key on first start, so Settings and the config always have one
   for (const f of ['mcp.js', 'mcp-tools.js']) {
     try { fs.copyFileSync(path.join(__dirname, f), USER(f)); } catch (e) { console.error('MCP connector:', e.message); }
   }
   const srv = agentapi.start({ keys: () => keysOf(hubSettings()), allowed: (a) => !!hubSettings()[AGENT_SWITCH[a]], handlers: agentHandlers,
+    expired: (scope) => { const s = hubSettings(); return keylog.isExpired((s.keyMade || {})[scope], (s.keyDays || {})[scope])
+      ? keylog.expiresAt(s.keyMade[scope], s.keyDays[scope]) : null; },
+    onCall: logCall,
     onAgent: (name, scope) => {
       lastAgent[scope] = { name: name === 'starnet-harness' ? 'Starnet' : name, at: Date.now() };
       send('agent:seen', lastAgent);
