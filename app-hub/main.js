@@ -11,6 +11,7 @@ const starnet = require('./src/starnet');
 const sleep = require('./src/sleep');
 const myapps = require('./src/myapps');
 const cleanup = require('./src/cleanup');
+const telegram = require('./src/telegram');
 
 const PORT = 8765;
 const WIN = process.platform === 'win32';
@@ -129,6 +130,7 @@ function notifyFinished(projects) {
     seen.set(p.id, p.status);
     if (!primed || !was || was === p.status || !['done', 'error'].includes(p.status)) continue;
     if (p.status === 'done' && hubSettings().starnetDrop) dropForStarnet(p.id);
+    if (p.status === 'done') tellTelegram(p.id);
     if (!hubSettings().notifications || !Notification.isSupported()) continue;
     if (win && win.isFocused() && page === 'clipforge') continue; // they're looking at it
     const n = p.status === 'done'
@@ -144,7 +146,8 @@ function notifyFinished(projects) {
 
 // agent*: which apps agents may use through the App Hub API (src/agentapi.js)
 // starnetDrop: leave a note in DROP_DIR when a video finishes, for a Starnet folder trigger
-const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, starnetDrop: false };
+// telegramOn: send a short Telegram message too (telegramToken + telegramChat, set in Settings)
+const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, starnetDrop: false, telegramOn: false };
 
 // Read once and kept: App Hub is the only writer (every agent request asks for the keys and switches).
 let hubCache = null;
@@ -193,6 +196,7 @@ function agentInfo(s) {
 
 function hubInfo() {
   const settings = hubSettings();
+  settings.telegramToken = telegram.mask(settings.telegramToken); // the page never gets the whole token
   return {
     version: app.getVersion(), cfDir: CF_DIR, platform: process.platform, settings,
     openAtLogin: app.getLoginItemSettings().openAtLogin, agent: agentInfo(settings),
@@ -202,6 +206,11 @@ function hubInfo() {
 function setHub(patch) {
   const s = hubSettings();
   for (const k of Object.keys(HUB_DEFAULTS)) if (k in patch) s[k] = !!patch[k];
+  if (patch.telegram) { // { token (empty: keep the saved one), chat } - checked before it's saved
+    const token = String(patch.telegram.token || '').trim() || s.telegramToken, chat = String(patch.telegram.chat || '').trim();
+    telegram.check(token, chat);
+    Object.assign(s, { telegramToken: token, telegramChat: chat, telegramOn: true });
+  }
   // a new key for one connector; the old one stops working at once
   const reset = CONNECTORS.find((c) => c.scope === patch.resetKey);
   if (reset) {
@@ -689,7 +698,12 @@ function createWindow() {
 }
 
 ipcMain.handle('hub:info', hubInfo);
-ipcMain.handle('hub:set', (_e, patch) => setHub(patch || {}));
+ipcMain.handle('hub:set', (_e, patch) => { try { return setHub(patch || {}); } catch (e) { return { error: e.message }; } });
+ipcMain.handle('telegram:test', async () => {
+  const s = hubSettings();
+  try { await telegram.send(s.telegramToken, s.telegramChat, '✅ App Hub can message you here. You\'ll get a note when ClipForge finishes a video.'); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
 // Free up space (Settings): what would go, then delete it. ClipForge's own list drops deleted videos by itself.
 const cleanOpts = (days) => ({ projects: PROJECTS(), workspaces: starnet.workspaces(), days: Number(days) || 0 });
 ipcMain.handle('clean:plan', (_e, days) => {
@@ -886,6 +900,13 @@ function newestVideo(url) {
 // "When a video finishes" for Starnet: a small JSON note in a folder a Starnet folder trigger watches.
 // Written as .tmp then renamed - Starnet ignores .tmp files, so it never reads half a note.
 const DROP_DIR = () => path.join(app.getPath('documents'), 'App Hub', 'Starnet inbox');
+function tellTelegram(id) {
+  const s = hubSettings();
+  if (!s.telegramOn || !s.telegramToken || !s.telegramChat) return;
+  telegram.send(s.telegramToken, s.telegramChat, telegram.finishedText(readProject(id)))
+    .catch((e) => console.error('Telegram message:', e.message));
+}
+
 function dropForStarnet(id) {
   try {
     const f = path.join(DROP_DIR(), `clipforge-${id}.json`);

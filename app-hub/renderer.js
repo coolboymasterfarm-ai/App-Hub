@@ -601,12 +601,30 @@ function paintAgent(info) {
   $('agent-open').hidden = !agent.starnetApp;
   $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;
   for (const b of document.querySelectorAll('[data-agent]')) b.checked = !!info.settings[b.dataset.agent];
+  const tg = info.settings;
+  $('tg-state').textContent = tg.telegramToken && tg.telegramChat ? `Bot ${tg.telegramToken} → chat ${tg.telegramChat}`
+    : 'Sent by your Telegram bot (the one Starnet uses works) to your chat.';
+  $('tg-token').placeholder = tg.telegramToken ? `Saved (${tg.telegramToken}) - paste a new one to change it` : 'Bot token, e.g. 123456789:AAH… (from @BotFather)';
+  if (!$('tg-chat').value) $('tg-chat').value = tg.telegramChat || '';
   paintSeen();
 }
 const copyText = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Could not copy'));
 $('agent-show').onclick = () => { keyShown = !keyShown; hub.info().then(paintAgent); };
 $('agent-copytimeout').onclick = () => copyText('600000', 'Copied 600000');
 $('agent-mcp').onclick = () => copyText(JSON.stringify(agent.mcp, null, 2), 'MCP config copied - paste it into .mcp.json');
+$('tg-save').onclick = async () => {
+  const r = await hub.set({ telegram: { token: $('tg-token').value, chat: $('tg-chat').value } });
+  if (r.error) return toast(r.error, 5000);
+  $('tg-token').value = '';
+  paintAgent(r);
+  toast('Telegram saved. Click Send test to check it.');
+};
+$('tg-test').onclick = async () => {
+  $('tg-test').disabled = true;
+  const r = await hub.telegramTest();
+  $('tg-test').disabled = false;
+  toast(r.ok ? 'Sent - check Telegram' : r.error, r.ok ? 2600 : 6000);
+};
 document.querySelectorAll('[data-agent]').forEach((b) => { b.onchange = () => hub.set({ [b.dataset.agent]: b.checked }); });
 hub.onAgentSeen((seen) => { if (agent) { agent.lastAgent = seen; hub.info().then(paintAgent); } });
 

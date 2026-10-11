@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('hub', {
   // hub
   info: () => ipcRenderer.invoke('hub:info'),
   set: (patch) => ipcRenderer.invoke('hub:set', patch),
+  telegramTest: () => ipcRenderer.invoke('telegram:test'),
   open: (folder) => ipcRenderer.invoke('hub:open', folder),
   cleanPlan: (days) => ipcRenderer.invoke('clean:plan', days),
   cleanRun: (days) => ipcRenderer.invoke('clean:run', days),

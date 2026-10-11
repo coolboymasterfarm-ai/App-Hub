@@ -84,6 +84,10 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
 26. Settings > ClipForge > Free up space (src/cleanup.js): finished videos older than 7/30/90 days (or all finished), plus
     the clip copies in Starnet's workspaces\<agent>\clipforge\<id> (older than that, or whose video goes). Shows how much
     it frees (a hard-linked file counts only if every link goes), asks to confirm. A video being made is never deleted.
+27. Telegram (src/telegram.js): when a video finishes, a short message ("Clips ready: <title> · N clips. Best: ...") from
+    a bot token + chat ID the user saves in Settings > Starnet & agents (the bot Starnet uses works: App Hub only
+    sends, never reads updates). Token checked before saving, kept in hub-settings.json, shown to the page masked.
+    "Send test" button. Bryce enters the token himself.
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
