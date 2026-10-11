@@ -538,7 +538,9 @@ const findApp = (id) => (mineUrls.has(id) ? { id, url: mineUrls.get(id) } : apps
 function openView(id) {
   const a = findApp(id);
   if (!a) return;
-  const v = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  // spellcheck off: the dictionary is ~10 MB of RAM per tab and checks every key press in the app
+  const v = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false } });
+  v.setBackgroundColor('#0a0b0e'); // the hub's colour while the app loads, not a white flash
   const wc = v.webContents;
   wc.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   wc.on('did-start-loading', () => { if (failed.delete(id)) layout(); tabState(id); });

@@ -62,3 +62,18 @@ def test_api_and_local_only_guard(project):
     assert web.post("/api/music/open", headers={"Origin": "https://evil.example"}).status_code == 403
     assert TestClient(server.app, base_url="http://evil.example").get("/api/projects").status_code == 403
     assert web.get("/api/projects", headers={"Origin": "http://127.0.0.1:8765"}).status_code == 200
+
+
+def test_listing_reads_only_changed_projects(project, monkeypatch):
+    assert [p["id"] for p in pipeline.listing()] == [project]
+    reads = []
+    real = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda self, *a, **k: reads.append(self.name) or real(self, *a, **k))
+    assert pipeline.listing()[0]["title"] == "Talk" and reads == []   # nothing changed: served from the cache
+    p = pipeline.load(project)
+    p["title"] = "Renamed"
+    pipeline.save(p)
+    reads.clear()
+    assert pipeline.listing()[0]["title"] == "Renamed" and reads == ["project.json"]
+    pipeline.delete(project)
+    assert pipeline.listing() == []
