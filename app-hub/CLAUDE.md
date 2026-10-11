@@ -72,6 +72,8 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     OmniRoute runs as `node <its package.json bin> --no-open` with this PC's Node, hidden: never omniroute.cmd, so no
     CMD window. Survives updates: everything is looked up fresh on each click (bin from package.json, ports from the
     apps' own files, and the Start menu shortcut if an update moved the program).
+    OmniRoute is started in the background when App Hub opens (it takes ~30 s); a slow app is waited for (5 s per
+    check, 2 min in all) so a second copy is never started.
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native

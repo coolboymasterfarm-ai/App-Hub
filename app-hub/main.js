@@ -369,7 +369,8 @@ function use(kind, id) {
 // Each has its own program and serves its own page on this PC. App Hub starts the program (hidden where it can)
 // and shows that page in a tab, like any other app. They keep running after App Hub closes - other tools use them.
 const mineUrls = new Map(); // 'my-starnet' etc. -> the address its page is on, once it answered
-const alive = async (url) => { try { await fetch(url, { signal: AbortSignal.timeout(2000) }); return true; } catch { return false; } };
+// Quick check for the Home tiles; the start loop waits longer, since OmniRoute's first page can take a few seconds.
+const alive = async (url, ms = 1500) => { try { await fetch(url, { signal: AbortSignal.timeout(ms) }); return true; } catch { return false; } };
 
 // The app's program: where we know to look, else where its Start menu / desktop shortcut points
 // (an update that moved the app keeps its shortcut up to date).
@@ -384,7 +385,7 @@ function exeOf(a) {
 async function mineState() {
   return Promise.all(Object.entries(myapps.myApps()).map(async ([key, a]) => {
     const url = a.url();
-    return { id: 'my-' + key, name: a.name, icon: a.icon, note: a.note, installed: !!exeOf(a), running: !!url && await alive(url) };
+    return { id: 'my-' + key, name: a.name, icon: a.icon, note: a.note, installed: !!exeOf(a), running: mineUrls.get('my-' + key) === url || (!!url && await alive(url)) };
   }));
 }
 
@@ -404,7 +405,8 @@ async function startMineNow(id) {
   const a = myapps.myApps()[String(id).replace(/^my-/, '')];
   if (!a) return { ok: false, error: 'Unknown app.' };
   let url = a.url();
-  if (url && await alive(url)) return setMineUrl(id, url);
+  // wait the long time here too: a busy app that answers slowly must not get a second copy started
+  if (url && await alive(url, 5000)) return setMineUrl(id, url);
   const exe = exeOf(a);
   if (!exe) return { ok: false, error: a.missing || `${a.name} isn't on this PC. Install it, then click Try again.` };
   // detached: it keeps running when App Hub closes. hidden: a console program (OmniRoute's Node) shows no window.
@@ -412,12 +414,13 @@ async function startMineNow(id) {
   let error = null;
   p.on('error', (e) => { error = e.message; });
   p.unref();
-  for (let i = 0; i < 90 && !error; i++) { // a cold start of StarNet or OmniRoute can take most of a minute
+  const until = Date.now() + 120000; // a cold start of StarNet or OmniRoute takes 20-60 s
+  while (Date.now() < until && !error) {
     await new Promise((r) => setTimeout(r, 1000));
     url = a.url();
-    if (url && await alive(url)) return setMineUrl(id, url);
+    if (url && await alive(url, 5000)) return setMineUrl(id, url);
   }
-  return { ok: false, error: error || `${a.name} didn't answer within 90 seconds. Open it from the Start menu once to see why.` };
+  return { ok: false, error: error || `${a.name} didn't answer within 2 minutes. Open it from the Start menu once to see why.` };
 }
 
 // ---------------------------------------------------------------- pages and app tabs
@@ -845,6 +848,7 @@ app.whenReady().then(() => {
   startOllama();
   if (cfReady()) updateYtDlp(startClipForge);
   createWindow();
+  startMine('my-omniroute'); // OmniRoute takes ~30 s to start, so it's ready by the time you click it
   startAgentApi();
   cfPoll();
   setInterval(cfPoll, 3000);
