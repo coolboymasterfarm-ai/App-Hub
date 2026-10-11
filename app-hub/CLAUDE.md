@@ -98,6 +98,8 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
 30. Every app the user adds gets its own connector (src/appconnectors.js): /mcp/<app id>, its own key (made when the app
     is added, deleted when it's removed), a Starnet id from its name, and a Claude Code server. Tools: status, info
     (name, address), check (is it answering), open (shows it in its App Hub tab). The Other Apps switch covers them.
+31. Discord (src/discord.js), next to Telegram: the same "clips ready" message posted through a channel webhook the user
+    pastes in Settings. Checked before saving (discord.com/api/webhooks/...), shown masked, Send test.
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native

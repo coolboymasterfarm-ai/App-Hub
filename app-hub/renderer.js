@@ -632,6 +632,8 @@ function paintAgent(info) {
     : 'Sent by your Telegram bot (the one Starnet uses works) to your chat.';
   $('tg-token').placeholder = tg.telegramToken ? `Saved (${tg.telegramToken}) - paste a new one to change it` : 'Bot token, e.g. 123456789:AAH… (from @BotFather)';
   if (!$('tg-chat').value) $('tg-chat').value = tg.telegramChat || '';
+  $('dc-state').textContent = tg.discordHook ? `Posts to ${tg.discordHook}` : 'The same message, posted to a Discord channel.';
+  $('dc-hook').placeholder = tg.discordHook ? 'Saved - paste a new webhook address to change it' : 'Webhook address: https://discord.com/api/webhooks/…';
   paintSeen();
 }
 const copyText = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Could not copy'));
@@ -644,6 +646,19 @@ $('tg-save').onclick = async () => {
   $('tg-token').value = '';
   paintAgent(r);
   toast('Telegram saved. Click Send test to check it.');
+};
+$('dc-save').onclick = async () => {
+  const r = await hub.set({ discord: { hook: $('dc-hook').value } });
+  if (r.error) return toast(r.error, 5000);
+  $('dc-hook').value = '';
+  paintAgent(r);
+  toast('Discord saved. Click Send test to check it.');
+};
+$('dc-test').onclick = async () => {
+  $('dc-test').disabled = true;
+  const r = await hub.discordTest();
+  $('dc-test').disabled = false;
+  toast(r.ok ? 'Sent - check Discord' : r.error, r.ok ? 2600 : 6000);
 };
 $('tg-test').onclick = async () => {
   $('tg-test').disabled = true;

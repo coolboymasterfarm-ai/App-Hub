@@ -12,6 +12,7 @@ const sleep = require('./src/sleep');
 const myapps = require('./src/myapps');
 const cleanup = require('./src/cleanup');
 const telegram = require('./src/telegram');
+const discord = require('./src/discord');
 const keylog = require('./src/keylog');
 const appconn = require('./src/appconnectors');
 
@@ -149,7 +150,8 @@ function notifyFinished(projects) {
 // agent*: which apps agents may use through the App Hub API (src/agentapi.js)
 // starnetDrop: leave a note in DROP_DIR when a video finishes, for a Starnet folder trigger
 // telegramOn: send a short Telegram message too (telegramToken + telegramChat, set in Settings)
-const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, agentMyapps: true, starnetDrop: false, telegramOn: false };
+// discordOn: post the same message to a Discord channel (discordHook: its webhook address)
+const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, agentMyapps: true, starnetDrop: false, telegramOn: false, discordOn: false };
 
 // Read once and kept: App Hub is the only writer (every agent request asks for the keys and switches).
 let hubCache = null;
@@ -205,6 +207,7 @@ function agentInfo(s) {
 function hubInfo() {
   const settings = hubSettings();
   settings.telegramToken = telegram.mask(settings.telegramToken); // the page never gets the whole token
+  settings.discordHook = discord.mask(settings.discordHook);
   return {
     version: app.getVersion(), cfDir: CF_DIR, platform: process.platform, settings,
     openAtLogin: app.getLoginItemSettings().openAtLogin, agent: agentInfo(settings),
@@ -216,6 +219,11 @@ function setHub(patch) {
   for (const k of Object.keys(HUB_DEFAULTS)) if (k in patch) s[k] = !!patch[k];
   if (patch.keyDays && connectors().some((c) => c.scope === patch.keyDays.scope) && keylog.DAYS.includes(Number(patch.keyDays.days))) {
     s.keyDays = { ...s.keyDays, [patch.keyDays.scope]: Number(patch.keyDays.days) };
+  }
+  if (patch.discord) { // { hook (empty: keep the saved one) }
+    const hook = String(patch.discord.hook || '').trim() || s.discordHook;
+    discord.check(hook);
+    Object.assign(s, { discordHook: hook, discordOn: true });
   }
   if (patch.telegram) { // { token (empty: keep the saved one), chat } - checked before it's saved
     const token = String(patch.telegram.token || '').trim() || s.telegramToken, chat = String(patch.telegram.chat || '').trim();
@@ -711,6 +719,10 @@ function createWindow() {
 
 ipcMain.handle('hub:info', hubInfo);
 ipcMain.handle('hub:set', (_e, patch) => { try { return setHub(patch || {}); } catch (e) { return { error: e.message }; } });
+ipcMain.handle('discord:test', async () => {
+  try { await discord.send(hubSettings().discordHook, '✅ App Hub can post here. You\'ll get a note when ClipForge finishes a video.'); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
 ipcMain.handle('telegram:test', async () => {
   const s = hubSettings();
   try { await telegram.send(s.telegramToken, s.telegramChat, '✅ App Hub can message you here. You\'ll get a note when ClipForge finishes a video.'); return { ok: true }; }
@@ -945,11 +957,14 @@ function newestVideo(url) {
 // "When a video finishes" for Starnet: a small JSON note in a folder a Starnet folder trigger watches.
 // Written as .tmp then renamed - Starnet ignores .tmp files, so it never reads half a note.
 const DROP_DIR = () => path.join(app.getPath('documents'), 'App Hub', 'Starnet inbox');
+// "Clips ready" on Telegram and/or Discord, whichever is switched on.
 function tellTelegram(id) {
   const s = hubSettings();
-  if (!s.telegramOn || !s.telegramToken || !s.telegramChat) return;
-  telegram.send(s.telegramToken, s.telegramChat, telegram.finishedText(readProject(id)))
-    .catch((e) => console.error('Telegram message:', e.message));
+  const tg = s.telegramOn && s.telegramToken && s.telegramChat, dc = s.discordOn && s.discordHook;
+  if (!tg && !dc) return;
+  const text = telegram.finishedText(readProject(id));
+  if (tg) telegram.send(s.telegramToken, s.telegramChat, text).catch((e) => console.error('Telegram message:', e.message));
+  if (dc) discord.send(s.discordHook, text).catch((e) => console.error('Discord message:', e.message));
 }
 
 function dropForStarnet(id) {

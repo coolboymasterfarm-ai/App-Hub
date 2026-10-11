@@ -219,6 +219,15 @@
               <button class="btn ghost sm" id="tg-test">Send test</button>
             </div>
             <p class="muted small">Chat ID: message <span class="mono">@userinfobot</span> on Telegram and it replies with yours. Message your bot once first, or it can't write to you.</p>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Discord message when a video finishes</b>
+              <span id="dc-state">The same message, posted to a Discord channel.</span></span>
+              <label class="sw"><input type="checkbox" data-agent="discordOn" aria-label="Discord message when a video finishes"><i></i></label></div>
+            <div class="tg-form">
+              <input id="dc-hook" placeholder="Webhook address: https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
+              <button class="btn ghost sm" id="dc-save">Save</button>
+              <button class="btn ghost sm" id="dc-test">Send test</button>
+            </div>
+            <p class="muted small">In Discord: the channel → <b>Edit Channel</b> → <b>Integrations</b> → <b>Webhooks</b> → <b>New Webhook</b> → <b>Copy Webhook URL</b>.</p>
             <div class="srow"><span class="sico"><svg class="i"><use href="#i-box"/></svg></span>
               <span class="stext"><b>Claude Code</b><span>Copies the MCP config: one server per app, each with its own key. Paste it into <span class="mono">.mcp.json</span> in your project folder, then restart Claude Code.</span></span>
               <button class="btn ghost sm" id="agent-mcp">Copy config</button></div>
