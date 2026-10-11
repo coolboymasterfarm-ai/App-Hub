@@ -81,6 +81,9 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     modified time/size changed. Whisper stays loaded between videos (one model at a time), Ollama gets keep_alive,
     media.probe() is cached per file, and a render's work/ temp folder is deleted however the render ended.
     App tabs: spellcheck off, dark background while loading.
+26. Settings > ClipForge > Free up space (src/cleanup.js): finished videos older than 7/30/90 days (or all finished), plus
+    the clip copies in Starnet's workspaces\<agent>\clipforge\<id> (older than that, or whose video goes). Shows how much
+    it frees (a hard-linked file counts only if every link goes), asks to confirm. A video being made is never deleted.
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native

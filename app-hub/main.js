@@ -10,6 +10,7 @@ const agentapi = require('./src/agentapi');
 const starnet = require('./src/starnet');
 const sleep = require('./src/sleep');
 const myapps = require('./src/myapps');
+const cleanup = require('./src/cleanup');
 
 const PORT = 8765;
 const WIN = process.platform === 'win32';
@@ -689,6 +690,13 @@ function createWindow() {
 
 ipcMain.handle('hub:info', hubInfo);
 ipcMain.handle('hub:set', (_e, patch) => setHub(patch || {}));
+// Free up space (Settings): what would go, then delete it. ClipForge's own list drops deleted videos by itself.
+const cleanOpts = (days) => ({ projects: PROJECTS(), workspaces: starnet.workspaces(), days: Number(days) || 0 });
+ipcMain.handle('clean:plan', (_e, days) => {
+  const p = cleanup.plan(cleanOpts(days));
+  return { videos: p.videos.length, copies: p.copies.length, bytes: p.bytes, size: cleanup.sizeText(p.bytes) };
+});
+ipcMain.handle('clean:run', (_e, days) => { const r = cleanup.run(cleanOpts(days)); return { ...r, size: cleanup.sizeText(r.freed) }; });
 ipcMain.handle('hub:open', (_e, key) => (FOLDERS[key] ? shell.openPath(FOLDERS[key]()) : 'unknown folder'));
 ipcMain.handle('hub:hardware', hwSummary);
 ipcMain.handle('cf:state', () => cfLast);
