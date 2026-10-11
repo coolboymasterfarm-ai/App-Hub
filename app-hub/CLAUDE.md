@@ -53,6 +53,13 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     switches, and "Tell Starnet when videos finish" (a JSON note in Documents\App Hub\Starnet inbox for a Starnet
     folder trigger). Repo folder starnet/: setup guide, skill package (make-skill-package.js), recipes.
 
+## Version 1.5 - Starnet, better (Bryce asked: keep improving it with Starnet; do NOT install Starnet from App Hub)
+20. Clip answers carry what agents post with: caption (hashtags), why, said, cover; `best` limits the answer too.
+21. Several videos (one per line, up to 10) in one call, sharing one deadline. Clips over 20 MB get an ffmpeg copy
+    that fits Telegram when sent to Starnet; covers are copied too.
+22. app_hub_status: ready_to_clip + ClipForge's doctor warnings + videos in progress. "Open Starnet" in Settings
+    (only when its shortcut exists). Recipe: Clips + posts for my socials.
+
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
 .exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.

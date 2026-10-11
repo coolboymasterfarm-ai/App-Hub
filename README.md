@@ -80,7 +80,7 @@ programs on your PC can connect, and they need your key.
    (`http://127.0.0.1:8770/mcp`) and the key.
 2. In Starnet, go to **CONNECT → ABILITIES → CONNECTED SERVICES → ADD A CONNECTOR**. Use id `apphub`, type
    **HTTP**, paste both, set timeout ms to `600000`, then click **+ ADD & CONNECT**.
-3. Import the skill (`starnet/app-hub-clipforge.starnet-skill.json`) and the recipes (`starnet/recipes/`).
+3. Import the skill (`starnet/app-hub-clipforge.starnet-skill.json`) and the three recipes (`starnet/recipes/`).
 
 **Reset key** makes a new key and copies it for you; paste it into Starnet's connector (**✎ EDIT**). For Claude
 Code, click **Copy config** and paste it into `.mcp.json`; it keeps working after a key reset. Scripts can use

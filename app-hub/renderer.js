@@ -509,6 +509,7 @@ function paintAgent(info) {
   $('agent-show').textContent = keyShown ? 'Hide' : 'Show';
   $('agent-mcpurl').textContent = agent.mcpUrl;
   $('agent-drop').textContent = agent.dropDir;
+  $('agent-open').hidden = !agent.starnetApp;
   $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;
   for (const b of document.querySelectorAll('[data-agent]')) b.checked = !!info.settings[b.dataset.agent];
   paintSeen();
