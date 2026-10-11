@@ -69,6 +69,9 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     Bryce's apps is and what address its page is on. Clicking one starts its own program (hidden where it can,
     never installed or changed by App Hub) and opens that page in a normal app tab. They keep running after App
     Hub closes, because other tools use them. StarNet picks a new port each start (read from its startup.log).
+    OmniRoute runs as `node <its package.json bin> --no-open` with this PC's Node, hidden: never omniroute.cmd, so no
+    CMD window. Survives updates: everything is looked up fresh on each click (bin from package.json, ports from the
+    apps' own files, and the Start menu shortcut if an update moved the program).
 
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
