@@ -10,6 +10,7 @@ const APPS = {
   clipforge: { title: 'ClipForge', prefix: 'clipforge_' },
   models: { title: 'AI Models', prefix: 'models_' },
   apps: { title: 'Other Apps', prefix: 'apps_' },
+  myapps: { title: 'My Apps', prefix: 'myapps_' },
 };
 
 const str = (description) => ({ type: 'string', description });
@@ -82,6 +83,10 @@ function tools(api) {
     ['models_use', 'Switch ClipForge to an installed model.', obj({ kind: str('ollama or whisper'), id: str('Model id') }, ['kind', 'id']), {},
       (a) => api('POST', '/v1/models/use', a)],
     ['apps_list', "The user's own apps in App Hub (name and address).", obj({}), READ, () => api('GET', '/v1/apps')],
+    ['myapps_running', 'Is StarNet, FreeLLMAPI or OmniRoute running on this PC, on which port, and its address ' +
+      '(FreeLLMAPI and OmniRoute also give their OpenAI-style API address). Read only: it never starts or stops them.',
+      obj({ app: str('Optional: starnet, freellmapi or omniroute (default: all three)') }), READ,
+      (a) => api('GET', '/v1/myapps/status' + (a && a.app ? '?app=' + enc(a.app) : ''))],
   ].map(([name, description, inputSchema, annotations, run]) => ({
     name, description, inputSchema, annotations, run,
     app: Object.keys(APPS).find((a) => name.startsWith(APPS[a].prefix)) || 'hub', // 'hub': app_hub_status, in every connector

@@ -148,7 +148,7 @@ function notifyFinished(projects) {
 // agent*: which apps agents may use through the App Hub API (src/agentapi.js)
 // starnetDrop: leave a note in DROP_DIR when a video finishes, for a Starnet folder trigger
 // telegramOn: send a short Telegram message too (telegramToken + telegramChat, set in Settings)
-const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, starnetDrop: false, telegramOn: false };
+const HUB_DEFAULTS = { notifications: true, agentClipforge: true, agentModels: true, agentApps: true, agentMyapps: true, starnetDrop: false, telegramOn: false };
 
 // Read once and kept: App Hub is the only writer (every agent request asks for the keys and switches).
 let hubCache = null;
@@ -179,6 +179,7 @@ const CONNECTORS = [
   { scope: 'clipforge', title: 'ClipForge', path: '/mcp/clipforge', id: 'clipforge', sw: 'agentClipforge' },
   { scope: 'models', title: 'AI Models', path: '/mcp/models', id: 'aimodels', sw: 'agentModels' },
   { scope: 'apps', title: 'Other Apps', path: '/mcp/apps', id: 'otherapps', sw: 'agentApps' },
+  { scope: 'myapps', title: 'My Apps', path: '/mcp/myapps', id: 'myapps', sw: 'agentMyapps' },
 ];
 
 // What an agent needs to connect: each connector's address and key, a ready-made MCP config for Claude Code
@@ -754,9 +755,19 @@ ipcMain.on('tab:close', (_e, id) => closeView(id));
 
 // ---------------------------------------------------------------- App Hub API for agents
 
-const AGENT_SWITCH = { clipforge: 'agentClipforge', models: 'agentModels', apps: 'agentApps' };
+const AGENT_SWITCH = { clipforge: 'agentClipforge', models: 'agentModels', apps: 'agentApps', myapps: 'agentMyapps' };
 
 const agentHandlers = {
+  // My Apps for agents: read only - running or not, port, addresses. Never starts or stops them.
+  async myapps(method, rest) {
+    const [what, query] = rest.split('?');
+    if (method !== 'GET' || what !== 'status') return { status: 404, body: { error: 'Try GET /v1/myapps/status' } };
+    const want = new URLSearchParams(query || '').get('app');
+    const all = myapps.myApps();
+    if (want && !all[want]) return { status: 400, body: { error: `Unknown app "${want}". Use starnet, freellmapi or omniroute.` } };
+    const state = await mineState();
+    return { apps: myapps.statusFor(all, state).filter((x) => !want || x.app === want) };
+  },
   status: async () => {
     const s = hubSettings();
     return { app: 'App Hub', version: app.getVersion(), clipforge: cfLast.state,

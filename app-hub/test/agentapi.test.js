@@ -76,7 +76,7 @@ test('App Hub MCP over HTTP (what Starnet connects to)', async () => {
     assert.deepStrictEqual(agents, ['starnet-harness']);
     assert.strictEqual((await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
     const list = (await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).body.result.tools;
-    assert.strictEqual(list.length, 18);
+    assert.strictEqual(list.length, 19);
     assert.ok(list.every((t) => t.inputSchema.type === 'object' && t.description));
     assert.strictEqual(list.find((t) => t.name === 'clipforge_list_videos').annotations.readOnlyHint, true);
     // a tool call runs the route in-process
@@ -96,12 +96,13 @@ test('App Hub MCP over HTTP (what Starnet connects to)', async () => {
 });
 
 test('A key per app: each reaches only its app, and /mcp/<app> serves only its tools', async () => {
-  const all = agentapi.newKey(), cf = agentapi.newKey('clipforge'), md = agentapi.newKey('models');
+  const all = agentapi.newKey(), cf = agentapi.newKey('clipforge'), md = agentapi.newKey('models'), my = agentapi.newKey('myapps');
   const agents = [];
   const srv = agentapi.start({
-    port: 0, keys: () => ({ all, clipforge: cf, models: md, apps: agentapi.newKey('apps') }), allowed: () => true,
+    port: 0, keys: () => ({ all, clipforge: cf, models: md, apps: agentapi.newKey('apps'), myapps: my }), allowed: () => true,
     onAgent: (n, scope) => agents.push([n, scope]),
-    handlers: { status: () => ({ ok: true }), clipforge: (m, rest) => ({ cf: rest }), models: () => ({ models: 1 }), apps: () => [] },
+    handlers: { status: () => ({ ok: true }), clipforge: (m, rest) => ({ cf: rest }), models: () => ({ models: 1 }), apps: () => [],
+      myapps: (m, rest) => ({ my: rest }) },
   });
   await once(srv, 'listening');
   const port = srv.address().port;
@@ -122,9 +123,15 @@ test('A key per app: each reaches only its app, and /mcp/<app> serves only its t
     assert.deepStrictEqual(await names('/mcp/models', md), ['status', 'overview', 'download', 'use']);
     assert.deepStrictEqual((await names('/mcp/models', all)).length, 4);
     assert.strictEqual((await rpc('/mcp/models', cf, { method: 'tools/list' })).status, 403);
+    // My Apps: its own key, read-only status tool; it can't reach ClipForge, ClipForge's key can't reach it
+    assert.deepStrictEqual(await names('/mcp/myapps', my), ['status', 'running']);
+    const run = await rpc('/mcp/myapps', my, { method: 'tools/call', params: { name: 'running', arguments: { app: 'omniroute' } } });
+    assert.deepStrictEqual(JSON.parse(run.body.result.content[0].text), { my: 'status?app=omniroute' });
+    assert.strictEqual((await rpc('/mcp/myapps', cf, { method: 'tools/list' })).status, 403);
+    assert.strictEqual((await call(port, { path: '/v1/clipforge/projects', headers: as(my) })).status, 403);
     // the all-apps connector with an app key: that app's tools only (prefixed), and calls stay in scope
     assert.ok((await names('/mcp', cf)).every((n) => n === 'app_hub_status' || n.startsWith('clipforge_')));
-    assert.strictEqual((await names('/mcp', all)).length, 18);
+    assert.strictEqual((await names('/mcp', all)).length, 19);
     const call1 = await rpc('/mcp/clipforge', cf, { method: 'tools/call', params: { name: 'list_videos', arguments: {} } });
     assert.deepStrictEqual(JSON.parse(call1.body.result.content[0].text), { cf: 'projects' });
     // who connected, and with which connector

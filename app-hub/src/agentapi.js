@@ -24,9 +24,9 @@ const mayUse = (scope, app) => scope === 'all' || scope === app;
 const wrongKey = (app) => `This key is not for ${APPS[app].title}. Use ${APPS[app].title}'s key or the all-apps key (App Hub > Settings > Starnet & agents).`;
 
 // Which app a path belongs to: /v1/<app>/... (status is allowed with any valid key).
-const appOf = (p) => (/^\/v1\/(clipforge|models|apps)(\/|$)/.exec(p) || [])[1] || null;
+const appOf = (p) => (/^\/v1\/(clipforge|models|apps|myapps)(\/|$)/.exec(p) || [])[1] || null;
 
-// handlers: { status(), clipforge(method, rest, body), models(method, rest, body), apps(method, rest, body) }
+// handlers: { status(), clipforge(...), models(...), apps(...), myapps(...) }, each (method, rest, body)
 // each returns { status: <number>, body } or a plain object (200).
 // keys(): { all, clipforge, models, apps }. onAgent(clientName, scope): an MCP client connected with that key.
 // expired(scope): when that key stopped working (ms), or null. onCall({ scope, tool, ok, ms }): after every request
@@ -80,7 +80,7 @@ function start({ keys, allowed, handlers, onAgent = () => {}, expired = () => nu
       body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : null;
     } catch { return send(400, { error: 'The body must be JSON' }); }
 
-    const m = /^\/mcp(?:\/(clipforge|models|apps))?$/.exec(req.url.split('?')[0].replace(/\/+$/, ''));
+    const m = /^\/mcp(?:\/(clipforge|models|apps|myapps))?$/.exec(req.url.split('?')[0].replace(/\/+$/, ''));
     if (m) {
       // Streamable HTTP, stateless: one JSON-RPC message (or a batch) per POST, the reply as JSON.
       if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return send(405, { error: 'POST JSON-RPC to this address' }); }

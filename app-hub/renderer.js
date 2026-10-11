@@ -558,11 +558,12 @@ $('ollama-btn').onclick = async () => {
 let agent = null, settingsNow = {}, keyShown = false;
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(t).toLocaleString(); };
 const seenText = (a) => a && el('span', { className: 'ok-dot' }, `● Connected: ${a.name}, ${ago(a.at)}`);
-const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''] };
+const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''], myapps: ['bot', ''] };
 const CONN_NOTE = {
   all: 'Every app below in one connector.',
   clipforge: 'Make clips, wait for them, send them to Starnet, transcripts, edits, HyperFrames styles.',
   models: "This PC's hardware and models: download and switch models.",
+  myapps: 'Is StarNet, FreeLLMAPI or OmniRoute running, and on which port (read only).',
   apps: 'The list of apps you added (read only).',
 };
 // One row per connector: its address and key to paste into Starnet, Reset, and (per app) the on/off switch.
