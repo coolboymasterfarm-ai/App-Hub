@@ -4,7 +4,7 @@
   "name": "Clip my newest upload",
   "emoji": "📺",
   "tagline": "Every morning: clip the newest video on a YouTube channel",
-  "blurb": "Finds the channel's newest upload, clips it with App Hub's ClipForge (skipping it if it was clipped already) and hands over the best clips. Make it a routine and tick \"Let this routine use your connected tools\". Needs App Hub open and its connector added.",
+  "blurb": "Finds the channel's newest upload, clips it with App Hub's ClipForge (skipping it if it was clipped already) and hands over the best clips with ready-to-post captions. Make it a routine and tick \"Let this routine use your connected tools\". Needs App Hub open and its connector added.",
   "accent": "#ffd400",
   "tags": {
     "creator": 1
@@ -31,5 +31,5 @@
       "type": "text"
     }
   ],
-  "task": "Use the App Hub connector (tools named mcp__apphub__...). Make exactly ONE call to mcp__apphub__clipforge_make_clips with input \"{channel}\", newest true, wait_minutes 9, skip_if_done true, send_to_starnet \"agent\" and best {count}. Do not call any other App Hub tool and never start the same video twice. Then reply with: the video title and id, and each returned clip best first (hook title, length in seconds, score, and its starnet.files path). If a file is marked over 20 MB, say it is too big for Telegram. If the status is not done, give the video id and say it is still working; if it is an error, quote the error exactly."
+  "task": "Use the App Hub connector (tools named mcp__apphub__...). Make exactly ONE call to mcp__apphub__clipforge_make_clips with input \"{channel}\", newest true, wait_minutes 9, skip_if_done true, send_to_starnet \"agent\" and best {count}. Do not call any other App Hub tool and never start the same video twice. Then reply with: the video title and id, and each returned clip best first: hook title, length in seconds, score, its starnet.files path, and its ready-to-post caption. If a file's note says it is too big for Telegram, say so. If the status is not done, give the video id and say it is still working; if it is an error, quote the error exactly."
 }

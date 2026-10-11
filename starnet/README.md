@@ -21,8 +21,8 @@ this PC that have its key.
 
 ## Set it up (one time, about 5 minutes)
 
-**1. Get App Hub 1.4 or newer.** Double-click `Update.bat`. In App Hub, open **Settings** and find the
-**Starnet & agents** card.
+**1. Get App Hub 1.5 or newer.** Double-click `Update.bat`. In App Hub, open **Settings** and find the
+**Starnet & agents** card. If Starnet is installed, the card has an **Open Starnet** button.
 
 **2. Add App Hub to Starnet.**
 1. In Starnet, go to **CONNECT → ABILITIES → CONNECTED SERVICES → ADD A CONNECTOR**.
@@ -50,6 +50,8 @@ to use App Hub.
 file in `starnet/recipes/`:
 - **Clip a video with ClipForge**: paste a link or a file path and get the best clips.
 - **Clip my newest upload**: give it your channel. Its suggested schedule is every morning.
+- **Clips + posts for my socials**: clips a video, then writes a post for each clip for TikTok, Instagram
+  Reels, YouTube Shorts or X.
 
 **5. (Optional) Run Starnet's agents for free on your own PC.** In App Hub, go to **AI Models** and download
 `qwen3:8b`. Then in Starnet, pick **OLLAMA** as the provider. Both apps use the same Ollama, so a model
@@ -59,6 +61,10 @@ you download in App Hub shows up in Starnet.
 
 **Chat.** Tell an agent: *"Clip this video with App Hub: https://youtube.com/watch?v=… and send me the best 3."*
 The first time, Starnet asks you to allow the App Hub connector. Choose **Always** if you trust it.
+
+Every clip comes back with a **ready-to-post caption** (with hashtags), why it was picked, what's said in it, and
+its video and cover files. Your agent can write posts from that with no extra App Hub calls. Several links, one
+per line, are clipped in the same call.
 
 **Schedules.** Go to **AUTOMATE → SCHEDULES → CREATE ROUTINE**.
 - **Name**: Morning clips
@@ -97,14 +103,15 @@ Your apps). Agents then get "switched off" instead.
 
 | Tool | What it does |
 | --- | --- |
-| `clipforge_make_clips` | The main one. A link, a channel's newest upload (`newest`) or a file → clips. It can wait (`wait_minutes`), skip videos it already did (`skip_if_done`) and copy the best clips into an agent's folder (`send_to_starnet`, `best`). |
+| `clipforge_make_clips` | The main one. One or more links, a channel's newest upload (`newest`) or files → clips with ready-to-post captions. It can wait (`wait_minutes`), skip videos it already did (`skip_if_done`) and copy the best clips into an agent's folder, sized for Telegram (`send_to_starnet`, `best`). |
 | `clipforge_wait_for_video` | Wait for or check a video by id, and optionally send its clips to Starnet. |
 | `clipforge_list_videos`, `clipforge_get_video`, `clipforge_transcript` | See videos, their clips and the transcript. |
 | `clipforge_make_clip`, `clipforge_edit_clip`, `clipforge_title_ideas`, `clipforge_rerender_all` | Cut your own clip, change a title, timing or captions, get title ideas, and re-render. |
 | `clipforge_styles`, `clipforge_get_settings`, `clipforge_set_settings` | HyperFrames caption styles, transitions, motion graphics, clip count and length. |
 | `clipforge_job` | Progress of one job. |
 | `models_overview`, `models_download`, `models_use` | This PC's hardware and AI models: download one, and switch ClipForge to it. |
-| `app_hub_status`, `apps_list` | What App Hub has running, and your own apps. |
+| `app_hub_status` | Can clips be made right now (`ready_to_clip`), what to fix if not, and videos in progress. |
+| `apps_list` | Your own apps in App Hub. |
 
 In Starnet, every tool name starts with `mcp__apphub__`.
 
@@ -116,9 +123,10 @@ In Starnet, every tool name starts with `mcp__apphub__`.
 - **Long videos.** One call waits up to 9½ minutes. If a video takes longer, the answer says "still
   working" with its id. The next run picks it up with `skip_if_done` or `clipforge_wait_for_video`.
 - **Getting video files on Telegram.** Starnet sends files only from an agent's own folder, and only up
-  to 20 MB. `send_to_starnet` copies the clips there and flags any over 20 MB. In a scheduled run, Starnet
-  also blocks *sending* a file after an outside answer, unless that agent is set to **FULL ACCESS**.
-  Otherwise you get the titles and paths, and the clips wait in the folder.
+  to 20 MB. `send_to_starnet` copies the clips (and covers) there. A clip over 20 MB gets a smaller copy
+  that fits; the original in ClipForge stays full quality. In a scheduled run, Starnet also blocks
+  *sending* a file after an outside answer, unless that agent is set to **FULL ACCESS**. Otherwise you get
+  the titles, captions and paths, and the clips wait in the folder.
 - **Keep App Hub open** while agents use it. **Starnet must be open** for its schedules to run.
 - Night Shift (away work) picks its own tasks, so use a **schedule** to clip videos while you're away.
 
@@ -135,6 +143,7 @@ In Starnet, every tool name starts with `mcp__apphub__`.
 | "connector request failed: timed out" | Set the connector's timeout ms to `600000` (**✎ EDIT** → advanced). |
 | "No Starnet agent folder …" | Use the agent id the message lists. The station's first agent is `agent`. |
 | "Starnet was not found on this PC" | Open Starnet once, so its folder exists. |
+| Clips fail and you don't know why | Ask the agent to run `app_hub_status`. It lists what to fix (for example: no AI running, HyperFrames not installed). |
 
 ## The files here
 

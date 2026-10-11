@@ -12,19 +12,22 @@ const READ = { readOnlyHint: true };
 // Starnet lets an unattended run make ONE connector call, so the main tool can do the whole job in one go.
 const WAIT = num('Minutes to wait for the clips to be finished (0-9.5). Use 9 in Starnet so one call does the whole job; ' +
   'set the connector timeout to 600000. If it is not finished in time you get the id - call clipforge_wait_for_video later.');
-const SEND = str('Optional: a Starnet agent id (e.g. "agent"). The finished clips are copied into that agent\'s Starnet ' +
-  'folder (clipforge/<video id>/) so it can open or send them.');
-const BEST = num('With send_to_starnet: copy only the best N clips (default all)');
+const SEND = str('Optional: a Starnet agent id (e.g. "agent"). The finished clips and covers are copied into that agent\'s ' +
+  'Starnet folder (clipforge/<video id>/) so it can open or send them; clips over 20 MB get a smaller copy that fits Telegram.');
+const BEST = num('Only the best N clips (default all): in the answer, and in what send_to_starnet copies');
 
 function tools(api) {
   const enc = encodeURIComponent;
   return [
-    ['app_hub_status', 'What App Hub has: ClipForge state, which apps agents may use, version, Starnet folder.', obj({}), READ,
+    ['app_hub_status', 'Can clips be made right now (ready_to_clip, and what to fix if not), which apps agents may use, ' +
+      'videos in progress, version, Starnet folder.', obj({}), READ,
       () => api('GET', '/v1/status')],
     ['clipforge_make_clips', 'Make short vertical clips (captions, hook title, HyperFrames graphics) from a YouTube link or a ' +
       'video file on this PC. It can wait until they are done and copy the best ones to a Starnet agent, all in one call. ' +
-      'Returns the video id, status, and every finished clip with its file path.',
-      obj({ input: str('YouTube link, YouTube channel link (with newest=true), or full path of a video file on this PC'),
+      'Returns the video id, status, and the finished clips best first, each with a ready-to-post caption (with hashtags), ' +
+      'why it was picked, what is said, and its video and cover files. Several lines of input make several videos in one call.',
+      obj({ input: str('YouTube link, YouTube channel link (with newest=true), or full path of a video file on this PC. ' +
+        'One per line for several videos (up to 10)'),
         newest: bool('input is a channel: clip its newest upload'),
         skip_if_done: bool('If this video was clipped before, return those clips instead of making new ones (good for schedules)'),
         topic: str('Optional: what the clips should be about'),
@@ -85,9 +88,10 @@ async function rpc(msg, list, onInit) {
   if (method === 'initialize') {
     if (onInit) onInit(params?.clientInfo);
     return ok({ protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'app-hub', title: 'App Hub', version: '1.4.0' },
-      instructions: 'App Hub runs ClipForge (AI clips from videos) and AI models on this PC. Start with app_hub_status. ' +
-        'clipforge_make_clips with wait_minutes 9 does a whole video in one call.' });
+      serverInfo: { name: 'app-hub', title: 'App Hub', version: '1.5.0' },
+      instructions: 'App Hub runs ClipForge (AI clips from videos) and AI models on this PC. clipforge_make_clips with ' +
+        'wait_minutes 9 does a whole video in one call - on a schedule, make only that call. If clips cannot be made, ' +
+        'app_hub_status says what to fix.' });
   }
   if (method === 'ping') return ok({});
   if (method === 'tools/list') {

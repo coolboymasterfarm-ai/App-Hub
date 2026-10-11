@@ -130,7 +130,7 @@ function agentInfo(key) {
   return {
     url: `http://127.0.0.1:${agentapi.PORT}`,
     mcpUrl: `http://127.0.0.1:${agentapi.PORT}/mcp`,
-    key, lastAgent, starnet: starnet.workspaces(), dropDir: DROP_DIR(),
+    key, lastAgent, starnet: starnet.workspaces(), starnetApp: !!starnet.shortcut(), dropDir: DROP_DIR(),
     mcp: { mcpServers: { 'app-hub': {
       command: process.execPath, args: [USER('mcp.js')],
       env: { ELECTRON_RUN_AS_NODE: '1', APP_HUB_KEY: key }, // runs the connector with App Hub's own Node
@@ -163,6 +163,7 @@ const FOLDERS = {
   hub: () => app.getPath('userData'),
   log: () => USER('clipforge.log'),
   drop: () => (fs.mkdirSync(DROP_DIR(), { recursive: true }), DROP_DIR()),
+  starnet: () => starnet.shortcut() || '', // opening the shortcut starts Starnet
 };
 
 let hwCache = null; // hardware doesn't change while the app runs
@@ -580,11 +581,11 @@ ipcMain.on('tab:close', (_e, id) => closeView(id));
 const AGENT_SWITCH = { clipforge: 'agentClipforge', models: 'agentModels', apps: 'agentApps' };
 
 const agentHandlers = {
-  status: () => {
+  status: async () => {
     const s = hubSettings();
     return { app: 'App Hub', version: app.getVersion(), clipforge: cfLast.state,
       access: Object.fromEntries(Object.entries(AGENT_SWITCH).map(([a, k]) => [a, s[k]])),
-      starnet_folder: starnet.workspaces() };
+      starnet_folder: starnet.workspaces(), ...(await readiness()) };
   },
   // ClipForge's own API, passed through (projects, clips, transcript, settings, options, jobs),
   // plus App Hub's one-call workflows: run (make clips, wait, send to Starnet) and wait/<id>.
@@ -613,6 +614,21 @@ const agentHandlers = {
   apps: (method) => (method === 'GET' ? apps.load(APPS_FILE()) : { status: 405, body: { error: 'Apps are read-only' } }),
 };
 
+// Can an agent make clips right now? ClipForge's own checks (ffmpeg, speech to text, YouTube, AI, HyperFrames)
+// turned into one yes/no and the fixes, so an agent can tell the user what to do instead of failing later.
+async function readiness() {
+  if (!hubSettings().agentClipforge) return { ready_to_clip: false, problems: ['Agent access to ClipForge is switched off in App Hub Settings.'] };
+  if (cfLast.state !== 'ready') {
+    return { ready_to_clip: false, problems: [cfLast.state === 'not-installed'
+      ? 'ClipForge is not installed: click Install on App Hub\'s Home page.' : `ClipForge is ${cfLast.state}: open App Hub's ClipForge page.`] };
+  }
+  let rows = [];
+  try { rows = (await (await fetch(CF_URL + '/api/doctor', { signal: AbortSignal.timeout(20000) })).json()).rows || []; } catch { /* no report: still ready */ }
+  // ClipForge still makes clips with most of these (e.g. no AI: its built-in scorer picks), so they are warnings
+  const warnings = rows.filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}${r.hint ? ` - ${r.hint}` : ''}`);
+  return { ready_to_clip: true, ...(warnings.length && { warnings }), videos_in_progress: cfLast.projects.filter((p) => !FINAL.includes(p.status)).length };
+}
+
 // ---- one-call ClipForge workflows (Starnet lets an unattended run make one connector call)
 
 const PROJECTS = () => path.join(CF_DIR, 'data', 'projects');
@@ -630,26 +646,57 @@ async function finish(id, a) {
     p = readProject(id);
   }
   const folder = path.join(PROJECTS(), id);
-  const out = starnet.summary(p, folder);
-  if (a.send_to_starnet && p.status === 'done') out.starnet = starnet.sendToStarnet(p, folder, String(a.send_to_starnet), Number(a.best) || 0);
+  const out = starnet.summary(p, folder, Number(a.best) || 0);
+  if (a.send_to_starnet && p.status === 'done') {
+    out.starnet = await starnet.sendToStarnet(p, folder, String(a.send_to_starnet), Number(a.best) || 0, { shrink });
+  }
   return out;
 }
 
-async function runClips(a) {
-  let input = String(a.input || '').trim();
-  if (!input) return { status: 400, body: { error: 'input is required: a YouTube link or a video file path' } };
-  if (a.newest) input = await newestVideo(input);
-  if (a.skip_if_done) {
-    const old = findProject(input);
-    if (old) return { ...(await finish(old, a)), reused: 'This video was clipped before; these are those clips.' };
+// A smaller copy of a clip that fits Telegram, with ClipForge's ffmpeg; tried once more at a lower bitrate if needed.
+async function shrink(from, to, seconds, limit) {
+  const ff = [path.join(CF_DIR, 'bin', WIN ? 'ffmpeg.exe' : 'ffmpeg')].find((f) => fs.existsSync(f)) || 'ffmpeg';
+  for (const factor of [1, 0.75]) {
+    const v = Math.floor(starnet.fitKbps(seconds, limit) * factor);
+    await new Promise((resolve, reject) => {
+      const p = spawn(ff, ['-y', '-v', 'error', '-i', from, ...(v < 1500 ? ['-vf', 'scale=-2:1280'] : []),
+        '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', `${v}k`, '-maxrate', `${v}k`, '-bufsize', `${2 * v}k`,
+        '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', to], { windowsHide: true });
+      let err = '';
+      p.stderr.on('data', (d) => { err += d; });
+      p.on('error', reject);
+      p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(err.trim().split(/\r?\n/).pop() || `ffmpeg exit ${code}`))));
+    });
+    if (fs.statSync(to).size <= limit) return;
   }
-  const r = await fetch(CF_URL + '/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input, topic: a.topic, from_min: a.from_min, to_min: a.to_min }) });
-  const made = await r.json().catch(() => ({}));
-  if (!r.ok) return { status: r.status, body: { error: made.detail || made.error || `ClipForge said ${r.status}` } };
-  const out = await finish(made.project, a); // ClipForge answers { project, job, count }
-  if (made.count > 1) out.note = `Started ${made.count} videos; this is the first. See clipforge_list_videos for the rest.`;
-  return out;
+  throw new Error('still over the limit');
+}
+
+// One line of input: one video (or a channel's newest). Several lines: several videos, all waited for together.
+async function runClips(a) {
+  const lines = String(a.input || '').split(/\r?\n/).map((x) => x.trim().replace(/^"|"$/g, '')).filter(Boolean);
+  if (!lines.length) return { status: 400, body: { error: 'input is required: a YouTube link or a video file path' } };
+  if (lines.length > 10) return { status: 400, body: { error: 'At most 10 videos in one call' } };
+  const until = Date.now() + Math.min(Math.max(Number(a.wait_minutes) || 0, 0), 9.5) * 60000;
+  const started = [];
+  for (let input of lines) {
+    if (a.newest) input = await newestVideo(input);
+    const old = a.skip_if_done && findProject(input);
+    if (old) { started.push({ id: old, reused: true }); continue; }
+    const r = await fetch(CF_URL + '/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input, topic: a.topic, from_min: a.from_min, to_min: a.to_min }) });
+    const made = await r.json().catch(() => ({}));
+    if (!r.ok) return { status: r.status, body: { error: `${input.slice(0, 80)}: ${made.detail || made.error || `ClipForge said ${r.status}`}` } };
+    started.push({ id: made.project }); // ClipForge answers { project, job, count }
+  }
+  // the videos share one deadline, so the whole call still fits Starnet's connector timeout
+  const left = () => Math.max(0, until - Date.now()) / 60000;
+  const out = [];
+  for (const v of started) {
+    const r = await finish(v.id, { ...a, wait_minutes: left() });
+    out.push(v.reused ? { ...r, reused: 'This video was clipped before; these are those clips.' } : r);
+  }
+  return out.length === 1 ? out[0] : { videos: out };
 }
 
 // The newest clip-able video for this input, if ClipForge already has one that didn't fail.
