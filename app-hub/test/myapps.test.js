@@ -13,6 +13,8 @@ test('starnetPort takes the newest listening port from StarNet startup.log', () 
     'spawn_sidecar pid=1 port=1234 listening=false',
   ].join('\r\n');
   assert.strictEqual(starnetPort(log), 59773);
+  // a future StarNet that words the line a little differently is still read
+  assert.strictEqual(starnetPort(log + '\nspawn_sidecar ok port=40001 pid=3'), 40001);
   assert.strictEqual(starnetPort(''), null);
 });
 
@@ -32,15 +34,30 @@ test('myApps finds the programs and addresses on this PC', () => {
   put(path.join(appdata, 'ai.skynet.harness', 'startup.log'), 'spawn_sidecar pid=9 port=57653 listening=true\n');
   put(path.join(home, 'Downloads', 'freellapi', 'FreeLLMAPI.exe'));
   put(path.join(appdata, 'FreeLLMAPI', 'config.json'), '{"port": 31416}');
-  put(path.join(appdata, 'npm', 'omniroute.cmd'));
+  assert.strictEqual(m.omniroute.exe, null);
+  // OmniRoute: its script comes from its package.json (an update may move it), run with this PC's Node
+  const omni = path.join(appdata, 'npm', 'node_modules', 'omniroute');
+  put(path.join(omni, 'package.json'), JSON.stringify({ bin: { omniroute: 'bin/v2/omniroute.mjs' } }));
+  put(path.join(omni, 'bin', 'v2', 'omniroute.mjs'));
+  env.PATH = '';
+  env.ProgramFiles = path.join(home, 'Program Files'); // not the test PC's real Node
+  assert.match(myApps(env).omniroute.missing, /Node\.js 22/); // OmniRoute there, Node not
+  put(path.join(appdata, 'npm', process.platform === 'win32' ? 'node.exe' : 'node'));
+  put(path.join(home, '.omniroute', '.env'), 'STORAGE_ENCRYPTION_KEY=x\nPORT=20130\n');
 
   m = myApps(env);
   assert.ok(m.starnet.exe.endsWith('skynet-desktop.exe'));
   assert.strictEqual(m.starnet.url(), 'http://127.0.0.1:57653/');
   assert.ok(m.freellmapi.exe.endsWith('FreeLLMAPI.exe'));
   assert.strictEqual(m.freellmapi.url(), 'http://127.0.0.1:31416/');
-  assert.ok(m.omniroute.exe.endsWith('omniroute.cmd'));
-  assert.deepStrictEqual(m.omniroute.args, ['--no-open']);
+  assert.ok(/node(\.exe)?$/.test(m.omniroute.exe));
+  assert.deepStrictEqual(m.omniroute.args, [path.join(omni, 'bin', 'v2', 'omniroute.mjs'), '--no-open']);
+  assert.strictEqual(m.omniroute.hidden, true);
+  assert.strictEqual(m.omniroute.url(), 'http://127.0.0.1:20130/');
+
+  // an installer's Start menu shortcut is found too (main.js follows it to the program)
+  put(path.join(appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'StarNet', 'StarNet.lnk'));
+  assert.strictEqual(myApps(env).starnet.shortcuts.length, 1);
 
   put(path.join(appdata, 'FreeLLMAPI', 'config.json'), 'not json'); // a broken config falls back to the default port
   assert.strictEqual(myApps(env).freellmapi.url(), 'http://127.0.0.1:31415/');

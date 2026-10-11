@@ -371,10 +371,20 @@ function use(kind, id) {
 const mineUrls = new Map(); // 'my-starnet' etc. -> the address its page is on, once it answered
 const alive = async (url) => { try { await fetch(url, { signal: AbortSignal.timeout(2000) }); return true; } catch { return false; } };
 
+// The app's program: where we know to look, else where its Start menu / desktop shortcut points
+// (an update that moved the app keeps its shortcut up to date).
+function exeOf(a) {
+  if (a.exe) return a.exe;
+  for (const lnk of a.shortcuts) {
+    try { const t = shell.readShortcutLink(lnk).target; if (t && fs.existsSync(t)) return t; } catch { /* not a shortcut we can read */ }
+  }
+  return null;
+}
+
 async function mineState() {
   return Promise.all(Object.entries(myapps.myApps()).map(async ([key, a]) => {
     const url = a.url();
-    return { id: 'my-' + key, name: a.name, icon: a.icon, note: a.note, installed: !!a.exe, running: !!url && await alive(url) };
+    return { id: 'my-' + key, name: a.name, icon: a.icon, note: a.note, installed: !!exeOf(a), running: !!url && await alive(url) };
   }));
 }
 
@@ -395,10 +405,10 @@ async function startMineNow(id) {
   if (!a) return { ok: false, error: 'Unknown app.' };
   let url = a.url();
   if (url && await alive(url)) return setMineUrl(id, url);
-  if (!a.exe) return { ok: false, error: `${a.name} isn't on this PC. Install it, then click Try again.` };
-  const cmd = /\.cmd$/i.test(a.exe);
-  const p = spawn(cmd ? 'cmd.exe' : a.exe, cmd ? ['/d', '/c', a.exe, ...(a.args || [])] : (a.args || []),
-    { cwd: path.dirname(a.exe), detached: true, stdio: 'ignore', windowsHide: true });
+  const exe = exeOf(a);
+  if (!exe) return { ok: false, error: a.missing || `${a.name} isn't on this PC. Install it, then click Try again.` };
+  // detached: it keeps running when App Hub closes. hidden: a console program (OmniRoute's Node) shows no window.
+  const p = spawn(exe, a.args || [], { cwd: path.dirname(a.args && a.args[0] ? a.args[0] : exe), detached: true, stdio: 'ignore', windowsHide: !!a.hidden });
   let error = null;
   p.on('error', (e) => { error = e.message; });
   p.unref();

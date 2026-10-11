@@ -47,7 +47,8 @@ The files land in `app-hub\dist\`.
 - **My Apps:** ClipForge, **StarNet**, **FreeLLMAPI** and **OmniRoute** in their own sidebar group and Home row. Click
   one and App Hub starts that app's own program (or finds it already running) and opens its page in a tab. It looks
   for them where they are on Bryce's PC: `Downloads\starnet\skynet-desktop.exe`, `Downloads\freellapi\FreeLLMAPI.exe`
-  and the `omniroute` command from npm. The tile says **Running**, **Click to start** or **Not found on this PC**.
+  and OmniRoute from npm (run straight with Node, so no CMD window opens). Everything is looked up again on each click,
+  so app updates (new version, new port, new install folder with a new shortcut) keep working. The tile says **Running**, **Click to start** or **Not found on this PC**.
 - **Other Apps:** **Add app** (sidebar **+** or Home) takes a web address, `http://localhost:PORT`, or **your own app
   folder** (Choose folder… or drag it in; it needs an `index.html`, and App Hub keeps its own copy). Each app opens in
   its own tab with **back / forward / reload / open in browser** in the title bar, its own icon (the site's favicon),
