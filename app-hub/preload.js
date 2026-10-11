@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('hub', {
   cleanRun: (days) => ipcRenderer.invoke('clean:run', days),
   hardware: () => ipcRenderer.invoke('hub:hardware'),
   onShortcut: on('hub:shortcut'),
+  onShow: on('hub:show'), // an agent asked to open an app
   onAgentSeen: on('agent:seen'),
   onAgentCall: on('agent:call'),
   // pages: the hub page owns the layout and tells the main process where app pages go

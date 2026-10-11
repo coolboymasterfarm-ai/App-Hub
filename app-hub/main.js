@@ -13,6 +13,7 @@ const myapps = require('./src/myapps');
 const cleanup = require('./src/cleanup');
 const telegram = require('./src/telegram');
 const keylog = require('./src/keylog');
+const appconn = require('./src/appconnectors');
 
 const PORT = 8765;
 const WIN = process.platform === 'win32';
@@ -157,20 +158,17 @@ function hubSettings() {
   let s;
   try { s = { ...HUB_DEFAULTS, ...JSON.parse(fs.readFileSync(USER('hub-settings.json'), 'utf8')) }; }
   catch { s = { ...HUB_DEFAULTS }; }
-  // agentKey reaches every app; appKeys.<app> only that app. Made on first start (and for apps added later).
-  const missing = !s.agentKey || CONNECTORS.some((c) => (c.scope !== 'all' && !(s.appKeys || {})[c.scope]) || !(s.keyMade || {})[c.scope]);
-  if (missing) {
-    // keyMade.<scope>: when that key was made (its expiry counts from then); keyDays.<scope>: how long it lives (0: always)
-    s.keyMade = { ...s.keyMade };
-    for (const c of CONNECTORS) if (!s.keyMade[c.scope]) s.keyMade[c.scope] = Date.now();
-    s.agentKey = s.agentKey || agentapi.newKey();
-    s.appKeys = { ...s.appKeys };
-    for (const c of CONNECTORS) if (c.scope !== 'all' && !s.appKeys[c.scope]) s.appKeys[c.scope] = agentapi.newKey(c.scope);
+  // agentKey reaches every app; appKeys.<app> only that app (also every app the user added). keyMade.<scope>: when
+  // that key was made (its expiry counts from then); keyDays.<scope>: how long it lives (0: always).
+  if (!s.agentKey) s.agentKey = agentapi.newKey();
+  if (appconn.syncKeys(s, connectors().map((c) => c.scope).filter((x) => x !== 'all'), agentapi.newKey)) {
     apps.save(USER('hub-settings.json'), s);
   }
   hubCache = s;
   return { ...s };
 }
+// After an app is added or removed: its key is made or deleted at once.
+function syncAppKeys() { hubCache = null; hubSettings(); }
 const keysOf = (s) => ({ all: s.agentKey, ...s.appKeys });
 
 // The connectors agents can add: all apps in one, or one per app with its own key (id: the Starnet connector id).
@@ -182,6 +180,9 @@ const CONNECTORS = [
   { scope: 'myapps', title: 'My Apps', path: '/mcp/myapps', id: 'myapps', sw: 'agentMyapps' },
 ];
 
+// The built-in connectors, then one for every app the user added (its own key, Starnet id from its name).
+const connectors = () => [...CONNECTORS, ...appconn.userConnectors(apps.load(APPS_FILE()), CONNECTORS)];
+
 // What an agent needs to connect: each connector's address and key, a ready-made MCP config for Claude Code
 // (one server per app), and the last agent that connected to each.
 const lastAgent = {}; // scope -> { name, at }
@@ -190,11 +191,11 @@ function agentInfo(s) {
   const base = `http://127.0.0.1:${agentapi.PORT}`;
   return {
     url: base, lastAgent, starnet: starnet.workspaces(), starnetApp: !!starnet.shortcut(), dropDir: DROP_DIR(),
-    connectors: CONNECTORS.map((c) => ({ ...c, url: base + c.path, key: keys[c.scope], lastUsed: agentLog.lastUsed[c.scope] || null,
+    connectors: connectors().map((c) => ({ ...c, url: base + c.path, key: keys[c.scope], lastUsed: agentLog.lastUsed[c.scope] || null,
       days: (s.keyDays || {})[c.scope] || 0, expires: keylog.expiresAt((s.keyMade || {})[c.scope], (s.keyDays || {})[c.scope]) })),
     calls: agentLog.calls,
     // runs the connector with App Hub's own Node; mcp.js reads the current key, APP_HUB_KEY is the fallback
-    mcp: { mcpServers: Object.fromEntries(CONNECTORS.filter((c) => c.scope !== 'all').map((c) => [c.id, {
+    mcp: { mcpServers: Object.fromEntries(connectors().filter((c) => c.scope !== 'all').map((c) => [c.id, {
       command: process.execPath, args: [USER('mcp.js')],
       env: { ELECTRON_RUN_AS_NODE: '1', APP_HUB_APP: c.scope, APP_HUB_KEY: keys[c.scope] },
     }])) },
@@ -213,7 +214,7 @@ function hubInfo() {
 function setHub(patch) {
   const s = hubSettings();
   for (const k of Object.keys(HUB_DEFAULTS)) if (k in patch) s[k] = !!patch[k];
-  if (patch.keyDays && CONNECTORS.some((c) => c.scope === patch.keyDays.scope) && keylog.DAYS.includes(Number(patch.keyDays.days))) {
+  if (patch.keyDays && connectors().some((c) => c.scope === patch.keyDays.scope) && keylog.DAYS.includes(Number(patch.keyDays.days))) {
     s.keyDays = { ...s.keyDays, [patch.keyDays.scope]: Number(patch.keyDays.days) };
   }
   if (patch.telegram) { // { token (empty: keep the saved one), chat } - checked before it's saved
@@ -222,7 +223,7 @@ function setHub(patch) {
     Object.assign(s, { telegramToken: token, telegramChat: chat, telegramOn: true });
   }
   // a new key for one connector; the old one stops working at once
-  const reset = CONNECTORS.find((c) => c.scope === patch.resetKey);
+  const reset = connectors().find((c) => c.scope === patch.resetKey);
   if (reset) {
     if (reset.scope === 'all') s.agentKey = agentapi.newKey();
     else s.appKeys = { ...s.appKeys, [reset.scope]: agentapi.newKey(reset.scope) };
@@ -737,9 +738,9 @@ ipcMain.handle('models:use', (_e, kind, id) => use(kind, id));
 ipcMain.handle('apps:list', () => apps.load(APPS_FILE()));
 ipcMain.handle('mine:state', mineState);
 ipcMain.handle('mine:start', (_e, id) => startMine(id));
-ipcMain.handle('apps:add', (_e, name, address) => tryApps((l) => addApp(l, name, address)));
+ipcMain.handle('apps:add', (_e, name, address) => { const r = tryApps((l) => addApp(l, name, address)); if (r.ok) syncAppKeys(); return r; });
 ipcMain.handle('apps:edit', (_e, id, name, address) => tryApps((l) => editApp(l, id, name, address)));
-ipcMain.handle('apps:remove', (_e, id) => { closeView(id); return tryApps((l) => removeApp(l, id)); });
+ipcMain.handle('apps:remove', (_e, id) => { closeView(id); const r = tryApps((l) => removeApp(l, id)); if (r.ok) syncAppKeys(); return r; });
 ipcMain.handle('apps:pick', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Choose your app folder (with an index.html)', properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
@@ -758,6 +759,29 @@ ipcMain.on('tab:close', (_e, id) => closeView(id));
 const AGENT_SWITCH = { clipforge: 'agentClipforge', models: 'agentModels', apps: 'agentApps', myapps: 'agentMyapps' };
 
 const agentHandlers = {
+  // An app the user added: its name and address, is it answering, and open it in its tab.
+  async userApp(id, method, rest) {
+    const a = apps.load(APPS_FILE()).find((x) => x.id === id);
+    if (!a) return { status: 404, body: { error: 'That app is no longer in App Hub.' } };
+    const what = rest.split('?')[0];
+    if (method === 'GET' && what === 'info') return { id, name: a.name, address: a.url, open_in_app_hub: views.has(id) };
+    if (method === 'GET' && what === 'check') {
+      if (a.url.startsWith('file:')) {
+        const ok = fs.existsSync(require('url').fileURLToPath(a.url));
+        return { answering: ok, ...(!ok && { why: "The app's files are missing." }) };
+      }
+      try {
+        const r = await fetch(a.url, { signal: AbortSignal.timeout(8000), redirect: 'follow' });
+        return { answering: r.status < 500, http_status: r.status };
+      } catch (e) { return { answering: false, why: (e.cause && e.cause.code) || e.message }; }
+    }
+    if (method === 'POST' && what === 'open') {
+      if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+      send('hub:show', id);
+      return { opened: a.name };
+    }
+    return { status: 404, body: { error: `Try GET /v1/${id}/info, GET /v1/${id}/check or POST /v1/${id}/open` } };
+  },
   // My Apps for agents: read only - running or not, port, addresses. Never starts or stops them.
   async myapps(method, rest) {
     const [what, query] = rest.split('?');
@@ -955,7 +979,9 @@ function startAgentApi() {
   for (const f of ['mcp.js', 'mcp-tools.js']) {
     try { fs.copyFileSync(path.join(__dirname, f), USER(f)); } catch (e) { console.error('MCP connector:', e.message); }
   }
-  const srv = agentapi.start({ keys: () => keysOf(hubSettings()), allowed: (a) => !!hubSettings()[AGENT_SWITCH[a]], handlers: agentHandlers,
+  const srv = agentapi.start({ keys: () => keysOf(hubSettings()), handlers: agentHandlers,
+    allowed: (a) => !!hubSettings()[AGENT_SWITCH[a] || (appconn.isUserApp(a) ? 'agentApps' : '')], // added apps: the Other Apps switch
+    title: (id) => (apps.load(APPS_FILE()).find((x) => x.id === id) || {}).name || null,
     expired: (scope) => { const s = hubSettings(); return keylog.isExpired((s.keyMade || {})[scope], (s.keyDays || {})[scope])
       ? keylog.expiresAt(s.keyMade[scope], s.keyDays[scope]) : null; },
     onCall: logCall,
