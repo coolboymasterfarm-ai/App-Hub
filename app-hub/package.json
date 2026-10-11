@@ -1,7 +1,7 @@
 {
   "name": "app-hub",
   "productName": "App Hub",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Your apps in one window, with AI models picked for your PC.",
   "author": "Bryce",
   "main": "main.js",
@@ -20,6 +20,7 @@
     "files": [
       "main.js",
       "mcp.js",
+      "mcp-tools.js",
       "preload.js",
       "renderer.js",
       "index.html",

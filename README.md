@@ -70,18 +70,21 @@ The files land in `app-hub\dist\`.
 
 ## Let your agents use App Hub (Starnet, Claude Code)
 
-App Hub runs a small API on your PC that AI agents can use: make clips from a link, check progress, read transcripts,
-make and edit clips, pick HyperFrames caption styles and transitions, see and download AI models, and list your apps.
-Only programs on your PC can reach it, and they need your key.
+Your [Starnet](https://github.com/androoAGI/starnet) crew can use App Hub's apps as tools. They can clip a video
+(or a channel's newest upload) in one call, wait for it, copy the best clips into their own folder, change
+HyperFrames styles, and download models. That works from a chat, a schedule, Telegram or a work line. Only
+programs on your PC can connect, and they need your key.
 
-1. In App Hub, open **Settings → Agent access**. Switch off anything agents shouldn't use.
-2. Click **Copy config**, then paste it into a file named `.mcp.json` in your Starnet folder. If that file already
-   exists, add the `app-hub` entry to its `mcpServers`.
-3. Restart Claude Code in that folder. Your agents now have App Hub tools (`clipforge_make_clips`,
-   `clipforge_get_video`, `clipforge_set_settings`, `models_overview`, …). App Hub must be open while they work.
+**Set up and examples: [starnet/README.md](starnet/README.md).** In short:
+1. In App Hub, go to **Settings → Starnet & agents** and copy the connector address
+   (`http://127.0.0.1:8770/mcp`) and the key.
+2. In Starnet, go to **CONNECT → ABILITIES → CONNECTED SERVICES → ADD A CONNECTOR**. Use id `apphub`, type
+   **HTTP**, paste both, set timeout ms to `600000`, then click **+ ADD & CONNECT**.
+3. Import the skill (`starnet/app-hub-clipforge.starnet-skill.json`) and the recipes (`starnet/recipes/`).
 
-**New key** makes a new key at once; paste the config again after using it. The API is at `http://127.0.0.1:8770`
-for scripts (`Authorization: Bearer <key>`; `GET /v1/status` to start).
+**Reset key** makes a new key and copies it for you; paste it into Starnet's connector (**✎ EDIT**). For Claude
+Code, click **Copy config** and paste it into `.mcp.json`; it keeps working after a key reset. Scripts can use
+the same API: `http://127.0.0.1:8770/v1/...` with `Authorization: Bearer <key>`, starting with `GET /v1/status`.
 
 ## Where things live (installed .exe)
 
@@ -89,6 +92,7 @@ for scripts (`Authorization: Bearer <key>`; `GET /v1/status` to start).
 - Your app list: `%APPDATA%\App Hub\apps.json`. Folder apps: `%APPDATA%\App Hub\apps\`.
 - Hub settings and window position: `%APPDATA%\App Hub\hub-settings.json`, `window.json`. ClipForge's log: `clipforge.log` there too.
 - Clips: `%LOCALAPPDATA%\App Hub\ClipForge\data\projects\<id>\clips\`.
+- Notes for Starnet (when switched on): `Documents\App Hub\Starnet inbox\`. Clips sent to Starnet: `<Starnet's workspaces>\<agent>\clipforge\<id>\`.
 
 ## Developing
 

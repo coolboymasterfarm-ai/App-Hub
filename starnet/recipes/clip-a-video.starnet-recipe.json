@@ -1,0 +1,35 @@
+{
+  "starnetRecipe": 1,
+  "id": "app-hub-clip-a-video",
+  "name": "Clip a video with ClipForge",
+  "emoji": "🎬",
+  "tagline": "Turn one long video into short captioned clips",
+  "blurb": "App Hub's ClipForge downloads the video, transcribes it, picks the best moments and renders vertical clips with captions, a hook title and HyperFrames graphics. The best clips are copied into your agent's folder. Needs App Hub open and its connector added.",
+  "accent": "#ffd400",
+  "tags": {
+    "creator": 1
+  },
+  "category": "creator",
+  "gear": [
+    "connector"
+  ],
+  "cadence": null,
+  "params": [
+    {
+      "key": "video",
+      "label": "YouTube link or full path of a video file",
+      "placeholder": "https://www.youtube.com/watch?v=...",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "count",
+      "label": "How many clips to hand over",
+      "placeholder": "3",
+      "required": false,
+      "default": "3",
+      "type": "text"
+    }
+  ],
+  "task": "Use the App Hub connector (tools named mcp__apphub__...). Make exactly ONE call to mcp__apphub__clipforge_make_clips with input \"{video}\", wait_minutes 9, skip_if_done true, send_to_starnet \"agent\" and best {count}. Do not call any other App Hub tool and never start the same video twice. Then reply with: the video title and id, and each returned clip best first (hook title, length in seconds, score, and its starnet.files path). If a file is marked over 20 MB, say it is too big for Telegram. If the status is not done, give the video id and say it is still working; if it is an error, quote the error exactly."
+}

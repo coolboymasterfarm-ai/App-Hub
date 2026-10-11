@@ -495,23 +495,39 @@ $('ollama-btn').onclick = async () => {
 // ---------------------------------------------------------------- Settings
 
 let agent = null, keyShown = false;
+const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(t).toLocaleString(); };
+function paintSeen() {
+  const a = agent.lastAgent;
+  $('agent-seen').innerHTML = '';
+  $('agent-seen').append(a
+    ? Object.assign(document.createElement('span'), { className: 'ok-dot', textContent: `● Connected: ${a.name}, ${ago(a.at)}` })
+    : agent.starnet ? 'Found on this PC, not connected yet. Follow the steps below.' : 'Not found on this PC. Install Starnet, then follow the steps below.');
+}
 function paintAgent(info) {
   agent = info.agent;
   $('agent-key').textContent = keyShown ? agent.key : agent.key.slice(0, 8) + '•'.repeat(24);
   $('agent-show').textContent = keyShown ? 'Hide' : 'Show';
+  $('agent-mcpurl').textContent = agent.mcpUrl;
+  $('agent-drop').textContent = agent.dropDir;
   $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;
   for (const b of document.querySelectorAll('[data-agent]')) b.checked = !!info.settings[b.dataset.agent];
+  paintSeen();
 }
 const copyText = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Could not copy'));
 $('agent-show').onclick = () => { keyShown = !keyShown; hub.info().then(paintAgent); };
-$('agent-copy').onclick = () => copyText(agent.key, 'API key copied');
+$('agent-copy').onclick = () => copyText(agent.key, 'Key copied - paste it into "bearer token" in Starnet');
+$('agent-copyurl').onclick = () => copyText(agent.mcpUrl, 'Address copied - paste it into the URL box in Starnet');
+$('agent-copytimeout').onclick = () => copyText('600000', 'Copied 600000');
 $('agent-mcp').onclick = () => copyText(JSON.stringify(agent.mcp, null, 2), 'MCP config copied - paste it into .mcp.json');
 $('agent-new').onclick = async () => {
-  if (!confirm('Make a new key? Agents using the old key stop working until you give them the new one.')) return;
+  if (!confirm('Reset the key? Starnet and other agents stop reaching App Hub until you paste the new key into them ' +
+    '(Starnet: CONNECTED SERVICES → App Hub → ✎ EDIT → bearer token → SAVE & RECONNECT).')) return;
+  keyShown = true;
   paintAgent(await hub.set({ newAgentKey: true }));
-  toast('New key made');
+  copyText(agent.key, 'New key made and copied - paste it into Starnet');
 };
 document.querySelectorAll('[data-agent]').forEach((b) => { b.onchange = () => hub.set({ [b.dataset.agent]: b.checked }); });
+hub.onAgentSeen((a) => { if (agent) { agent.lastAgent = a; paintSeen(); } });
 
 async function loadSettings() {
   const info = await hub.info();
