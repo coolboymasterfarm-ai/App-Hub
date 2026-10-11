@@ -57,10 +57,14 @@
     <nav class="side" aria-label="App Hub">
       <div class="side-sec">
         <button class="nav" data-page="home"><svg class="i"><use href="#i-home"/></svg><span>Home</span></button>
-        <button class="nav" data-page="clipforge"><span class="app-ico cf"><svg class="i"><use href="#i-scissors"/></svg></span><span>ClipForge</span><i class="state" id="cf-dot"></i></button>
         <button class="nav" data-page="models"><svg class="i"><use href="#i-chip"/></svg><span>AI Models</span></button>
       </div>
-      <div class="side-head"><span>Your apps</span><button class="mini" id="side-add" title="Add app" aria-label="Add app"><svg class="i"><use href="#i-plus"/></svg></button></div>
+      <div class="side-head"><span>My Apps</span></div>
+      <div class="side-sec">
+        <button class="nav" data-page="clipforge"><span class="app-ico cf"><svg class="i"><use href="#i-scissors"/></svg></span><span>ClipForge</span><i class="state" id="cf-dot"></i></button>
+        <div class="side-apps mine" id="side-mine"></div>
+      </div>
+      <div class="side-head"><span>Other Apps</span><button class="mini" id="side-add" title="Add app" aria-label="Add app"><svg class="i"><use href="#i-plus"/></svg></button></div>
       <div class="side-apps" id="side-apps"></div>
       <div class="side-foot">
         <button class="nav" data-page="settings"><svg class="i"><use href="#i-gear"/></svg><span>Settings</span></button>
@@ -102,7 +106,12 @@
           </section>
 
           <section>
-            <div class="sec-head"><h2>Your apps</h2><span class="muted small">Websites, local tools or your own app folders, each in its own tab.</span></div>
+            <div class="sec-head"><h2>My Apps</h2><span class="muted small">Your own apps. App Hub starts them and opens each in its own tab.</span></div>
+            <div class="tiles" id="mine-tiles"></div>
+          </section>
+
+          <section>
+            <div class="sec-head"><h2>Other Apps</h2><span class="muted small">Apps from other companies and GitHub repos: websites, local tools or app folders.</span></div>
             <div class="tiles" id="tiles"></div>
           </section>
         </div>

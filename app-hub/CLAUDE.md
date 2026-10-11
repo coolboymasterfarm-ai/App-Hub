@@ -63,6 +63,13 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
 23. Less RAM with many apps (1.5.1): app tabs not looked at for 10 min, or the oldest beyond 5 awake, go to sleep
     (closed, src/sleep.js) and reopen at the same address when clicked. Tabs playing sound stay awake.
 
+## Version 1.6 - My Apps (Bryce asked: StarNet, FreeLLMAPI and OmniRoute inside App Hub, like apps)
+24. Sidebar and Home have two groups: "My Apps" (ClipForge, StarNet, FreeLLMAPI, OmniRoute) and "Other Apps"
+    (the apps the user adds: other companies' sites, GitHub repos, folders). src/myapps.js says where each of
+    Bryce's apps is and what address its page is on. Clicking one starts its own program (hidden where it can,
+    never installed or changed by App Hub) and opens that page in a normal app tab. They keep running after App
+    Hub closes, because other tools use them. StarNet picks a new port each start (read from its startup.log).
+
 ## NOT built yet (do not build, even if it seems small)
 Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
 .exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.
