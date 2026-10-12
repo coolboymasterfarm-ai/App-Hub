@@ -1,0 +1,54 @@
+Grammarly Feature Comparison (Free, Pro, Enterprise) – sourced from https://www.grammarly.com/plans (accessed 12 Oct 2026)
+
+FREE
+- Grammar, spelling, and punctuation checking
+- Tone detection
+- 100 AI prompts per month
+- Browser extension, desktop, mobile apps
+- Basic writing suggestions
+- See your writing tone
+
+PRO (includes all Free features)
+- Rewrite full sentences with a click
+- Adjust your writing tone with ease
+- Write fluently in English (fluency suggestions)
+- Unlimited personalized suggestions
+- Detect plagiarism and AI‑generated text
+- Generate text with 2,000 AI prompts per member per month
+- Style guide (1)
+- Brand tones (1)
+- Snippets
+- Knowledge Share
+- Analytics dashboard (Team and Individual)
+- Priority support
+- Help center access
+
+ENTERPRISE (includes all Pro features)
+- Proactive AI that works everywhere
+- Dedicated support
+- BYOK encryption (Bring Your Own Key)
+- Custom roles and permissions
+- Data loss prevention
+- Cost center visibility
+- Application and domain controls
+- Client control
+- Confidential mode
+- Audit Logs API
+- Enterprise key management
+- Session timeout
+- Group‑level security controls
+- Invite and domain capture
+- User groups (unlimited)
+- Custom roles (unlimited)
+- ROI Report
+- Effective Communication Score
+- Unlimited brand tones
+- Unlimited style guide
+- Unlimited snippets
+- Unlimited Knowledge Share
+- Unlimited Analytics dashboard
+- Advanced security and admin controls (SAML SSO, SCIM, etc.)
+
+Note: Accessing Grammarly’s Pro or Enterprise features without a paid subscription violates Grammarly’s Terms of Service and may breach copyright‑protection laws (e.g., DMCA). To use these features legally, subscribe via Grammarly’s official plans, explore educational or volume discounts, or use the free tier within its limits.
+
+For an App Hub integration, consider using Grammarly’s official APIs (if available) or open‑source writing‑assistant alternatives (e.g., LanguageTool) that can be combined with local models under permissible licenses.
