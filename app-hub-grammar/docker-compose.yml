@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  languagetool:
+    image: languagetool/languagetool
+    ports:
+      - "8010:8010"
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx2g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/v2/languages"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Add a Redis cache for better performance
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+
+  # Optional: Add a simple frontend for testing LanguageTool
+  languagetool-ui:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    depends_on:
+      - languagetool
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+networks:
+  default:
+    name: app-hub-grammar-network
+    driver: bridge
