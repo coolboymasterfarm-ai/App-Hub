@@ -1,83 +1,132 @@
-# App Hub
+# App Hub - Open Source Grammarly Clone
 
-A software factory for building AI-powered applications with local model integration.
+A real-time writing assistant that checks grammar, spelling, and style using the LanguageTool API.
 
-## Overview
-This App Hub serves as a central platform for developing and deploying AI-enhanced applications, with specific focus on integrating writing assistance capabilities similar to Grammarly's features while maintaining compliance with licensing terms.
+## Features
 
-## Grammarly Feature Analysis
-Based on research from Grammarly's official plans page (accessed 12 Oct 2026):
-
-### Free Tier
-- Grammar, spelling, and punctuation checking
+- Real-time grammar and spelling checking with debounce
+- Error highlighting in text
+- One-click apply suggestions
 - Tone detection
-- 100 AI prompts per month
-- Browser extension, desktop, mobile apps
-- Basic writing suggestions
-- See your writing tone
+- Word/character/sentence/paragraph counting
+- Dark mode support
+- Clean, modern UI with Tailwind CSS
 
-### Pro Tier (includes Free)
-- Rewrite full sentences with a click
-- Adjust your writing tone with ease
-- Write fluently in English (fluency suggestions)
-- Unlimited personalized suggestions
-- Detect plagiarism and AI-generated text
-- Generate text with 2,000 AI prompts per member per month
-- Style guide (1)
-- Brand tones (1)
-- Snippets
-- Knowledge Share
-- Analytics dashboard (Team and Individual)
-- Priority support
-- Help center access
+## Tech Stack
 
-### Enterprise Tier (includes Pro)
-- Proactive AI that works everywhere
-- Dedicated support
-- BYOK encryption (Bring Your Own Key)
-- Custom roles and permissions
-- Data loss prevention
-- Cost center visibility
-- Application and domain controls
-- Client control
-- Confidential mode
-- Audit Logs API
-- Enterprise key management
-- Session timeout
-- Group-level security controls
-- Invite and domain capture
-- User groups (unlimited)
-- Custom roles (unlimited)
-- ROI Report
-- Effective Communication Score
-- Unlimited brand tones
-- Unlimited style guide
-- Unlimited snippets
-- Unlimited Knowledge Share
-- Unlimited Analytics dashboard
-- Advanced security and admin controls (SAML SSO, SCIM, etc.)
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Backend**: Node.js + Express
+- **NLP**: LanguageTool API (public: https://api.languagetool.org/v2/check)
 
-## Legal & Ethical Considerations
-Accessing Grammarly's Pro or Enterprise features without a paid subscription violates Grammarly's Terms of Service and may breach copyright-protection laws (e.g., DMCA). To use these features legally:
-- Subscribe via Grammarly's official plans
-- Explore educational or volume discounts
-- Use the free tier within its limits
+## Project Structure
 
-## Recommended Approach for App Hub Integration
-1. Use Grammarly's official APIs (if available) for legitimate feature integration
-2. Consider open-source writing-assistant alternatives (e.g., LanguageTool) that can be combined with local models under permissible licenses
-3. Focus on building complementary features that respect Grammarly's intellectual property
+```
+app-hub/
+├── server/
+│   └── index.js          # Express backend
+├── client/
+│   ├── public/
+│   ├── src/
+│   │   ├── components/   # React components
+│   │   ├── hooks/        # Custom React hooks
+│   │   ├── services/     # API services
+│   │   ├── types/        # TypeScript types
+│   │   ├── App.tsx       # Main app component
+│   │   ├── main.tsx      # Entry point
+│   │   └── index.css     # Tailwind styles
+│   ├── package.json      # Frontend dependencies
+│   ├── vite.config.ts    # Vite configuration
+│   ├── tailwind.config.js # Tailwind configuration
+│   └── postcss.config.js # PostCSS configuration
+├── package.json          # Root package with scripts
+└── README.md
+```
 
-## Development Setup
-This repository is initialized as a Git repository for version control.
+## Setup
 
-To get started:
-1. Clone this repository
-2. Install required dependencies
-3. Begin developing your AI-powered writing assistance features
+1. Install dependencies:
+   ```bash
+   npm run install:all
+   ```
+
+2. Start the development servers:
+   ```bash
+   npm run dev
+   ```
+
+   This will start:
+   - Backend server on http://localhost:5000
+   - Frontend Vite dev server on http://localhost:3000
+
+## API Endpoints
+
+### Grammar Check
+- **POST** `/api/check`
+- Body: `{ "text": "your text here" }`
+- Returns: LanguageTool API response with grammar suggestions
+
+### Writing Statistics
+- **POST** `/api/stats`
+- Body: `{ "text": "your text here" }`
+- Returns: `{ words, characters, sentences, paragraphs }`
+
+### Health Check
+- **GET** `/api/health`
+- Returns: `{ status: 'ok', message: 'Grammarly clone API is running' }`
+
+## Building for Production
+
+```bash
+npm run build
+```
+
+This will:
+1. Build the React frontend (output to `client/dist/`)
+2. Prepare the Express server to serve static files
+
+To start the production server:
+```bash
+npm start
+```
+
+## Environment Variables
+
+The application can be configured using environment variables:
+
+- `PORT`: Server port (default: 5000)
+- `NODE_ENV`: Environment (development/production)
+
+## How It Works
+
+1. User types in the editor component
+2. Text changes trigger a debounced API call to `/api/check`
+3. The backend forwards the request to LanguageTool API
+4. Results are displayed in the results panel with suggestions
+5. Users can click on highlighted errors to see suggestions
+6. One-click apply functionality replaces text with selected suggestion
+
+## LanguageTool API
+
+This application uses the public LanguageTool API at:
+https://api.languagetool.org/v2/check
+
+No API key is required for basic usage, but for high-volume applications, consider getting your own API key or self-hosting LanguageTool.
 
 ## Contributing
-Feel free to submit issues and pull requests to improve the App Hub platform.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing-feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
-[To be determined based on project requirements]
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgements
+
+- [LanguageTool](https://languagetool.org/) for the powerful grammar checking API
+- [React](https://reactjs.org/) for the frontend library
+- [Vite](https://vitejs.dev/) for the fast development server
+- [Tailwind CSS](https://tailwindcss.com/) for the utility-first CSS framework
