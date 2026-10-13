@@ -1,35 +1,84 @@
 const axios = require('axios');
 
+const TYPES = { grammar: 'Grammar', spelling: 'Spelling', punctuation: 'Punctuation', style: 'Style' };
+
+// Where each mistake the model named sits in the text, in order (the model gives words, not positions).
+// Returns the matches the page shows: { message, replacements: [string], offset, length, category: { id, name } }.
+function locate(text, issues) {
+  const out = [];
+  let from = 0;
+  for (const i of Array.isArray(issues) ? issues : []) {
+    const wrong = String((i && i.wrong) || '');
+    const fix = String((i && i.fix) ?? '');
+    if (!wrong || wrong === fix) continue;
+    let at = text.indexOf(wrong, from);
+    if (at < 0) at = text.indexOf(wrong); // the model listed it out of order
+    if (at < 0 || out.some((m) => at < m.offset + m.length && m.offset < at + wrong.length)) continue; // not there, or overlaps
+    const id = TYPES[i.type] ? i.type : 'grammar';
+    out.push({ message: String(i.why || 'Possible mistake'), replacements: [fix], offset: at, length: wrong.length, category: { id, name: TYPES[id] } });
+    from = at + wrong.length;
+  }
+  return out.sort((a, b) => a.offset - b.offset);
+}
+
+// LanguageTool's matches in the same shape (its replacements are objects, its category sits under rule).
+const fromLanguageTool = (data) => (data.matches || []).map((m) => ({
+  message: m.message, offset: m.offset, length: m.length,
+  replacements: (m.replacements || []).slice(0, 5).map((r) => r.value),
+  category: { id: String((m.rule && m.rule.category && m.rule.category.id) || 'grammar').toLowerCase(),
+    name: (m.rule && m.rule.category && m.rule.category.name) || 'Grammar' },
+}));
+
 class GrammarService {
   constructor() {
-    // no local LanguageTool server: LanguageTool's free public one (limited to about 20 checks a minute)
+    // The AI models on this PC: App Hub runs Ollama and downloads its models (AI Models page).
+    this.ollamaUrl = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+    this.model = process.env.OLLAMA_MODEL || null; // else the best one installed
+    // Used only when no local model answers: LanguageTool's free public server (about 20 checks a minute)
     this.languagetoolUrl = process.env.LANGUAGETOOL_URL || 'https://api.languagetool.org/v2';
-    this.huggingfaceApiKey = process.env.HUGGINGFACE_API_KEY;
-    this.hfApiUrl = 'https://api-inference.huggingface.co/models';
+  }
+
+  // The local model to use: OLLAMA_MODEL, else an installed qwen3 (what App Hub recommends), else any chat model.
+  async _localModel() {
+    if (this.model) return this.model;
+    const { data } = await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 2000 });
+    const names = (data.models || []).map((m) => m.name).filter((n) => !/embed/i.test(n));
+    return names.find((n) => /^qwen3/.test(n)) || names[0] || null;
+  }
+
+  // Ask the local model; its answer is JSON. null when no model is running or the answer isn't usable.
+  async _ask(task, text) {
+    try {
+      const model = await this._localModel();
+      if (!model) return null;
+      const { data } = await axios.post(`${this.ollamaUrl}/api/chat`, {
+        model, stream: false, format: 'json', think: false, keep_alive: '10m', options: { temperature: 0 },
+        messages: [{ role: 'system', content: task + ' Answer with JSON only.' }, { role: 'user', content: text }],
+      }, { timeout: 120000 });
+      return { model, answer: JSON.parse(data.message.content) };
+    } catch (error) {
+      console.warn('Local model not available:', error.message);
+      return null;
+    }
   }
 
   /**
-   * Check text for grammar, spelling, and style issues
-   * @param {string} text - The text to check
-   * @param {string} language - Language code (default: en-US)
-   * @returns {Promise<Object>} LanguageTool response
+   * Check text for grammar, spelling, punctuation and style: the local model first, LanguageTool if none runs.
+   * @returns {Promise<Object>} { matches, engine }
    */
   async checkGrammar(text, language = 'en-US') {
+    const local = await this._ask(
+      `You proofread ${language} text. List every grammar, spelling and punctuation mistake, and clear style problems. ` +
+      'Return {"issues":[{"wrong":"the exact words from the text","fix":"the corrected words","why":"a short reason",' +
+      '"type":"grammar|spelling|punctuation|style"}]}. Copy "wrong" exactly as written. Return {"issues":[]} if there are none.', text);
+    if (local) return { matches: locate(text, local.answer.issues), engine: `local model ${local.model}` };
     try {
-      const response = await axios.post(`${this.languagetoolUrl}/check`, 
-        new URLSearchParams({
-          text: text,
-          language: language,
-          enabledOnly: false
-        }), {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        }
-      );
-      return response.data;
+      const response = await axios.post(`${this.languagetoolUrl}/check`,
+        new URLSearchParams({ text, language, enabledOnly: false }),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      return { matches: fromLanguageTool(response.data), engine: 'LanguageTool' };
     } catch (error) {
-      throw new Error(`Grammar check failed: ${error.message}`);
+      throw new Error(`Grammar check failed: no local model is running (open App Hub > AI Models) and LanguageTool: ${error.message}`);
     }
   }
 
@@ -47,98 +96,26 @@ class GrammarService {
   }
 
   /**
-   * Detect tone of text using Hugging Face API or rule-based fallback
-   * @param {string} text - Text to analyze
+   * Detect tone of text with the local model, or the built-in rules
    * @returns {Promise<Object>} Tone analysis result
    */
   async detectTone(text) {
-    // If Hugging Face API key is available, use it
-    if (this.huggingfaceApiKey) {
-      try {
-        const response = await axios.post(
-          `${this.hfApiUrl}/nlptown/bert-base-multilingual-uncased-sentiment`,
-          { inputs: text },
-          {
-            headers: {
-              Authorization: `Bearer ${this.huggingfaceApiKey}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        // Process the response to map to tone categories
-        const results = response.data[0] || [];
-        const toneMap = {
-          '1 star': 'very_negative',
-          '2 stars': 'negative', 
-          '3 stars': 'neutral',
-          '4 stars': 'positive',
-          '5 stars': 'very_positive'
-        };
-        
-        const topResult = results.reduce((prev, current) => 
-          (prev.score > current.score) ? prev : current
-        );
-        
-        return {
-          tone: toneMap[topResult.label] || 'neutral',
-          confidence: topResult.score,
-          details: `Detected as ${topResult.label} sentiment`,
-          allScores: results.map(r => ({
-            label: r.label,
-            score: r.score,
-            tone: toneMap[r.label] || 'neutral'
-          }))
-        };
-      } catch (error) {
-        console.warn('Hugging Face tone detection failed, falling back to rule-based:', error.message);
-        // Fall through to rule-based approach
-      }
-    }
-    
-    // Rule-based fallback for tone detection
+    const local = await this._ask('Judge the tone of the text. Return {"tone":"formal|informal|casual|friendly|confident|' +
+      'neutral|negative|positive","confidence":0-1,"details":"one short sentence why"}.', text);
+    if (local && local.answer.tone) return { ...local.answer, engine: `local model ${local.model}` };
     return this._detectToneRuleBased(text);
   }
 
   /**
-   * Get clarity suggestions using rule-based and optional HF enhancement
-   * @param {string} text - Text to analyze
+   * Get clarity suggestions with the local model, or the built-in rules
    * @returns {Promise<Object>} Clarity suggestions
    */
   async getClaritySuggestions(text) {
-    // Try Hugging Face for text improvement if API key available
-    if (this.huggingfaceApiKey) {
-      try {
-        // Use a text generation model for paraphrasing/clarity
-        const response = await axios.post(
-          `${this.hfApiUrl}/facebook/bart-large-cnn`,
-          { inputs: `Improve clarity: ${text}` },
-          {
-            headers: {
-              Authorization: `Bearer ${this.huggingfaceApiKey}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        const improvedText = response.data[0]?.generated_text || text;
-        if (improvedText !== text && improvedText.trim()) {
-          return {
-            suggestions: [{
-              original: text,
-              suggested: improvedText,
-              reason: 'Improved clarity and conciseness',
-              confidence: 0.8
-            }],
-            message: 'AI-powered clarity suggestions generated'
-          };
-        }
-      } catch (error) {
-        console.warn('Hugging Face clarity failed, using rule-based:', error.message);
-      }
+    const local = await this._ask('Find sentences that are unclear, wordy or hard to follow. Return {"suggestions":' +
+      '[{"original":"the exact sentence","suggested":"a clearer version","reason":"short reason"}]}, or {"suggestions":[]}.', text);
+    if (local && Array.isArray(local.answer.suggestions)) {
+      return { suggestions: local.answer.suggestions, message: `Clarity suggestions from ${local.model} on this PC` };
     }
-    
-    // Rule-based clarity suggestions
     return this._getClaritySuggestionsRuleBased(text);
   }
 
@@ -163,71 +140,16 @@ class GrammarService {
   }
 
   /**
-   * Get advanced vocabulary suggestions using Hugging Face or rule-based
-   * @param {string} text - Text to analyze
+   * Get vocabulary suggestions (stronger or simpler words) with the local model
    * @returns {Promise<Object>} Vocabulary suggestions
    */
   async getVocabularySuggestions(text) {
-    // Try Hugging Face for vocabulary enhancement if API key available
-    if (this.huggingfaceApiKey) {
-      try {
-        // Use a fill-mask model or similar for word suggestions
-        // For simplicity, we'll identify complex words and suggest simpler alternatives
-        const words = text.split(/\s+/);
-        const suggestions = [];
-        
-        // Check a few words for synonyms (limited to avoid API overload)
-        for (let i = 0; i < Math.min(3, words.length); i++) {
-          const word = words[i].replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');
-          if (word.length > 5) { // Only suggest for longer words
-            try {
-              const response = await axios.post(
-                `${this.hfApiUrl}/facebook/bart-large-mnli`,
-                {
-                  inputs: text,
-                  parameters: {
-                    candidate_labels: [`Use a simpler word instead of "${word}"`, `Keep the word "${word}"`]
-                  }
-                },
-                {
-                  headers: {
-                    Authorization: `Bearer ${this.huggingfaceApiKey}`,
-                    'Content-Type': 'application/json'
-                  }
-                }
-              );
-              
-              // If the model suggests changing the word, add a suggestion
-              if (response.data && response.data[0] && 
-                  response.data[0].label.includes('simpler word') && 
-                  response.data[0].score > 0.7) {
-                suggestions.push({
-                  original: word,
-                  suggested: this._getSimplerSynonym(word), // Simple fallback
-                  reason: 'Consider a more common word for better readability',
-                  confidence: response.data[0].score
-                });
-              }
-            } catch (wordError) {
-              // Continue with other words if one fails
-              continue;
-            }
-          }
-        }
-        
-        if (suggestions.length > 0) {
-          return {
-            suggestions: suggestions,
-            message: 'AI-powered vocabulary suggestions generated'
-          };
-        }
-      } catch (error) {
-        console.warn('Hugging Face vocabulary failed, using rule-based:', error.message);
-      }
+    const local = await this._ask('Suggest better word choices: weak, vague, repeated or overly complex words. Return ' +
+      '{"suggestions":[{"original":"the exact word","suggested":"a better word","reason":"short reason"}]} (at most 8).', text);
+    if (local && Array.isArray(local.answer.suggestions)) {
+      return { suggestions: local.answer.suggestions, message: `Vocabulary suggestions from ${local.model} on this PC` };
     }
-    
-    // Rule-based vocabulary suggestions
-    return this._getVocabularySuggestionsRuleBased(text);
+    return { suggestions: [], message: 'Vocabulary suggestions need a local AI model: open App Hub > AI Models.' };
   }
 
   /**
@@ -484,27 +406,8 @@ class GrammarService {
     };
   }
 
-  /**
-   * Get a simpler synonym for a word (basic implementation)
-   * @private
-   */
-  _getSimplerSynonym(word) {
-    // Basic mapping of complex words to simpler ones
-    const synonymMap = {
-      'utilize': 'use',
-      'facilitate': 'help',
-      'demonstrate': 'show',
-      'terminate': 'end',
-      'initiate': 'start',
-      'approximately': 'about',
-      'numerous': 'many',
-      'sufficient': 'enough',
-      'require': 'need',
-      'purchase': 'buy'
-    };
-    
-    return synonymMap[word.toLowerCase()] || word;
-  }
+
 }
 
 module.exports = new GrammarService();
+module.exports.locate = locate;
