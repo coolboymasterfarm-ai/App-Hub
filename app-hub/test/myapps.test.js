@@ -89,3 +89,18 @@ test('statusFor: what an agent sees about My Apps (port and address only while r
   ]);
   assert.strictEqual(statusFor({ omniroute: all.omniroute }, [{ id: 'my-omniroute', installed: true, running: true }])[0].api, 'http://127.0.0.1:20128/v1');
 });
+
+test('bundled apps: Grammar and Agent Dashboard run with App Hub\'s Node on their own ports', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bundled-'));
+  const b = { dir, node: '/app-hub-node' };
+  let m = myApps({}, b);
+  assert.strictEqual(m.grammar.exe, null); // not built
+  assert.match(m.grammar.missing, /Update\.bat/);
+  const script = path.join(dir, 'app-hub-grammar', 'backend', 'src', 'server.js');
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.writeFileSync(script, '');
+  m = myApps({}, b);
+  assert.deepStrictEqual([m.grammar.exe, m.grammar.args, m.grammar.env, m.grammar.url()],
+    ['/app-hub-node', [script], { ELECTRON_RUN_AS_NODE: '1', PORT: '5090' }, 'http://127.0.0.1:5090/']);
+  assert.strictEqual(m.dashboard.url(), 'http://127.0.0.1:5091/');
+});

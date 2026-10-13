@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import SuggestionList from './SuggestionList';
 import { useDebounce } from '../hooks/useDebounce';
 import { grammarService } from '../services/grammarService';
@@ -55,12 +55,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
   }, [debouncedText]);
 
   const handleAcceptSuggestion = (suggestion: Suggestion) => {
-    onTextChange(prevText => {
-      const before = prevText.slice(0, suggestion.offset);
-      const after = prevText.slice(suggestion.offset + suggestion.length);
-      const replacement = suggestion.replacements[0] || '';
-      return before + replacement + after;
-    });
+    const replacement = suggestion.replacements[0] || '';
+    onTextChange(text.slice(0, suggestion.offset) + replacement + text.slice(suggestion.offset + suggestion.length));
   };
 
   const handleCopyToClipboard = async () => {

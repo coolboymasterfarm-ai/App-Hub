@@ -53,7 +53,19 @@ function npmBin(dir, name) {
 // A KEY=value line from a .env file.
 const envValue = (text, key) => (new RegExp('^\\s*' + key + '\\s*=\\s*"?(\\d+)', 'm').exec(text) || [])[1];
 
-function myApps(env = process.env) {
+// Apps that ship inside App Hub (Grammar, Agent Dashboard): where they are (resources/ when installed, the repo
+// when run from source; main.js sets dir) and the Node that runs them (App Hub's own, as ELECTRON_RUN_AS_NODE).
+const BUNDLED = { dir: null, node: process.execPath };
+
+// One bundled Node server: started with App Hub's Node on a fixed port, hidden, page and API at one address.
+function bundledApp(b, rel, port, info) {
+  const script = b.dir && path.join(b.dir, rel);
+  return { ...info, exe: exists(script) ? b.node : null, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', PORT: String(port) },
+    shortcuts: [], hidden: true, missing: `${info.name} isn't built. Run Update.bat, then click Try again.`,
+    url: () => `http://127.0.0.1:${port}/` };
+}
+
+function myApps(env = process.env, b = BUNDLED) {
   const home = env.USERPROFILE || env.HOME || '';
   const appdata = env.APPDATA || '';
   const local = env.LOCALAPPDATA || '';
@@ -85,6 +97,10 @@ function myApps(env = process.env) {
       missing: omniBin && !node ? "OmniRoute needs Node.js 22 or newer. Install it from nodejs.org, then click Try again." : null,
       url: () => `http://127.0.0.1:${envValue(omniEnv, 'DASHBOARD_PORT') || envValue(omniEnv, 'PORT') || 20128}/`,
     },
+    grammar: bundledApp(b, path.join('app-hub-grammar', 'backend', 'src', 'server.js'), 5090,
+      { name: 'Grammar', icon: 'edit', note: 'Your own Grammarly: grammar, spelling, tone and clarity.' }),
+    dashboard: bundledApp(b, path.join('app-hub-dashboard', 'server.js'), 5091,
+      { name: 'Agent Dashboard', icon: 'cpu', note: 'Your agents, their tasks and how they are doing.' }),
   };
 }
 
@@ -99,4 +115,4 @@ function statusFor(all, state) {
   });
 }
 
-module.exports = { myApps, starnetPort, shortcuts, findNode, npmBin, tail, statusFor };
+module.exports = { myApps, BUNDLED, starnetPort, shortcuts, findNode, npmBin, tail, statusFor };
