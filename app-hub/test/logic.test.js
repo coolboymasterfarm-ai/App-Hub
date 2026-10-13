@@ -67,3 +67,13 @@ test('app update', () => {
   assert.throws(() => apps.update(list, 'nope', 'X', 'https://x.com'), /gone/);
   assert.throws(() => apps.update(list, id, 'X', 'not a url'), /Use a web address/);
 });
+
+test('tab sleep: old hidden tabs, and the oldest while too many are awake; never the shown or a playing one', () => {
+  const { toSleep } = require('../src/sleep');
+  const now = 100 * 60000;
+  const lastSeen = new Map([['a', now - 20 * 60000], ['b', now - 60000], ['c', now - 30000], ['d', now]]);
+  assert.deepStrictEqual(toSleep(['a', 'b', 'c', 'd'], { shown: 'd', lastSeen, now }), ['a']);            // 20 min unseen
+  assert.deepStrictEqual(toSleep(['a', 'b', 'c', 'd'], { shown: 'a', lastSeen, now }), []);               // shown
+  assert.deepStrictEqual(toSleep(['a', 'b', 'c', 'd'], { shown: 'd', lastSeen, now, audible: (id) => id === 'a' }), []); // playing
+  assert.deepStrictEqual(toSleep(['a', 'b', 'c', 'd'], { shown: 'd', lastSeen, now, max: 2 }), ['a', 'b']); // too many awake
+});

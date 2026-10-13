@@ -351,6 +351,9 @@ const sdot = s => s === "done" ? "ok" : s === "error" ? "bad" : s === "cancelled
 async function loadList() { LIST = await api("/api/projects").catch(() => LIST); paintList(); }
 function paintList() {
   const list = LIST.filter(p => !Q || (p.title || "").toLowerCase().includes(Q));
+  const sig = JSON.stringify([list, cur, Q]);   // the poll asks every 1.5 s; redraw (and reload thumbnails) only on a change
+  if (sig === paintList.sig) return;
+  paintList.sig = sig;
   $("#plist").innerHTML = list.length ? list.map(p => `
     <div class="pitem ${p.id === cur ? "on" : ""}" onclick="go('${p.id}')" title="${esc(p.title)}">
       ${p.thumb ? `<img src="/files/${p.id}/${p.thumb}" alt="" loading="lazy">` : `<div class="ph"></div>`}
@@ -488,6 +491,7 @@ function sorted() {
   return SORT === "time" ? cs.sort((a, b) => a.start - b.start) : cs.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 }
 function renderProject() {
+  const cards = new Map();   // clip card id -> its HTML this time
   const p = P, busy = !["done","error","cancelled"].includes(p.status);
   const done = p.clips.filter(c => c.file).length;
   const sub = [p.source ? fmt(p.source.duration) + " long" : esc(p.input || ""), p.source?.uploader && esc(p.source.uploader),
@@ -497,6 +501,8 @@ function renderProject() {
   const typed = [...document.querySelectorAll(".editor.open input, .editor.open textarea")]
     .filter(e => e.value !== e.defaultValue).map(e => [e.id, e.value]);
   const txNode = $("#txwrap");
+  // clip cards that didn't change keep their old element, so their video and picture aren't loaded again
+  const oldCards = new Map([...document.querySelectorAll(".clip")].map(n => [n.id, n]));
   const canTx = !!p.source && !["queued","downloading","transcribing"].includes(p.status);
   if (!canTx && VIEW === "transcript") VIEW = "clips";
   $("#main").innerHTML = `<div class="wrap">
@@ -524,9 +530,13 @@ function renderProject() {
           <option value="time" ${SORT === "time" ? "selected" : ""}>In video order</option></select>` : ""}
     </div>` : ""}
     ${VIEW === "transcript" ? `<div id="txslot"></div>` : `
-      <div class="grid" id="grid">${sorted().map(clipCard).join("")}</div>
+      <div class="grid" id="grid">${sorted().map(c => cards.set("c" + c.n, clipCard(c)).get("c" + c.n)).join("")}</div>
       ${!p.clips.length && !busy ? `<div class="empty">${ic("film")}<div>No clips yet.</div></div>` : ""}`}
   </div>`;
+  for (const n of document.querySelectorAll(".clip")) {
+    const old = oldCards.get(n.id);
+    if (old && old.dataset.html === cards.get(n.id)) n.replaceWith(old); else n.dataset.html = cards.get(n.id);
+  }
   for (const [id, v] of typed) { const e = document.getElementById(id); if (e) e.value = v; }
   if (VIEW === "transcript") {
     if (txNode && TX && TX.pid === p.id) { $("#txslot").replaceWith(txNode); paintTxClips(); } else renderTranscript();
@@ -686,7 +696,7 @@ async function renderTranscript() {
   node.innerHTML = `<div class="txbody" id="txbody">${sents.map((x, i) => `<div class="txs" data-i="${i}"><span class="ts">${fmt(x.s)}</span><span>${esc(x.text)}</span></div>`).join("")
       || `<div class="empty">No speech found.</div>`}</div>
     <div class="txside">
-      ${playable ? `<div class="card"><video id="txv" src="/files/${P.id}/${encodeURIComponent(src)}" controls preload="metadata" onerror="this.closest('.card').remove()"></video></div>` : ""}
+      ${playable ? `<div class="card"><video id="txv" src="/files/${P.id}/${encodeURIComponent(src)}" controls preload="none" onerror="this.closest('.card').remove()"></video></div>` : ""}
       <div class="card"><h4>${ic("scissors")} Make your own clip</h4>
         <div class="hint" id="txhint">Click the first sentence of your clip, then the last one.</div>
         <div id="txsel"></div></div>
@@ -874,6 +884,14 @@ document.addEventListener("keydown", e => {
 
 // ------------------------------------------------------------ poll
 let ticking = false;
+// Inside App Hub this page stays loaded on other pages; the hub says when it's off screen, so it stops polling.
+let parked = false;
+addEventListener('message', (e) => {
+  if (e.source !== parent || !e.data || !('cfHidden' in e.data)) return;
+  parked = !!e.data.cfHidden;
+  if (!parked) tick();
+});
+
 async function tick() {
   if (ticking) return; ticking = true;
   try {
@@ -891,7 +909,7 @@ async function tick() {
   [S, OPTS] = await Promise.all([api("/api/settings").catch(() => ({})), api("/api/options").catch(() => OPTS)]);
   await Promise.all([loadStatus(), loadList()]);
   route();
-  setInterval(() => { if (!document.hidden) tick(); }, 1500);
+  setInterval(() => { if (!document.hidden && !parked) tick(); }, 1500);
 })();
 </script>
 </body>

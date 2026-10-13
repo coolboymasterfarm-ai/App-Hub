@@ -26,6 +26,9 @@ function toast(msg, ms = 2600) {
 
 const PAGES = { home: 'Home', clipforge: 'ClipForge', models: 'AI Models', settings: 'Settings' };
 let apps = [];
+let mine = [];              // My Apps: FreeLLMAPI, OmniRoute (ClipForge has its own page; StarNet uses its own window)
+const starting = new Set(); // My Apps being started right now
+const tabApp = (id) => mine.find((m) => m.id === id) || apps.find((a) => a.id === id);
 const open = new Set();     // user apps with a live tab
 const tabs = new Map();     // app id -> last tab:state
 let page = null;
@@ -55,13 +58,16 @@ function host(url) {
 
 // ---------------------------------------------------------------- navigation
 
-const order = () => ['home', 'clipforge', 'models', ...apps.map((a) => a.id), 'settings'];
+const order = () => ['home', 'models', 'clipforge', ...mine.map((m) => m.id), ...apps.map((a) => a.id), 'settings'];
 
 function show(id) {
-  if (!PAGES[id] && !apps.some((a) => a.id === id)) id = 'home';
+  if (!PAGES[id] && !tabApp(id)) id = 'home';
   page = id;
   const isApp = !PAGES[id];
+  const fresh = isApp && !open.has(id); // a new tab needs a sidebar entry; otherwise the .on toggle below is enough
   if (isApp) open.add(id);
+  // ClipForge's page stays loaded; tell it to stop polling while it's off screen
+  if (cfLoaded) $('cf-frame').contentWindow.postMessage({ cfHidden: id !== 'clipforge' }, cf.url);
   for (const p of document.querySelectorAll('.page')) p.classList.toggle('on', p.id === 'page-' + (isApp ? 'app' : id));
   for (const n of document.querySelectorAll('.nav')) n.classList.toggle('on', n.dataset.page === id);
   $('tb-title').hidden = isApp;
@@ -72,9 +78,29 @@ function show(id) {
   if (id === 'settings') loadSettings();
   if (id === 'clipforge') paintCf();
   hub.show(id);
-  renderSide();
+  if (id.startsWith('my-') && !tabs.has(id)) startMine(id); // its view opens once its program answers
+  if (fresh) renderSide();
   paintTab();
   sendRect();
+}
+
+// Starts FreeLLMAPI / OmniRoute (or finds it running), then opens its page in the tab.
+async function startMine(id) {
+  if (starting.has(id)) return;
+  starting.add(id);
+  tabs.delete(id);
+  paintTab();
+  const r = await hub.startMine(id);
+  starting.delete(id);
+  if (!r.ok) tabs.set(id, { failed: r.error, mine: true });
+  else if (page === id) { tabs.delete(id); hub.show(id); }
+  if (page === id) paintTab();
+  refreshMine();
+}
+async function refreshMine() {
+  mine = await hub.mineState();
+  renderSide();
+  if (page === 'home') renderTiles();
 }
 
 function closeTab(id) {
@@ -85,26 +111,32 @@ function closeTab(id) {
 }
 
 // The app pages are native views laid over <main>; tell the main process where <main> is.
+// Only when it moved: every rect makes the main process lay out the native views again.
+let lastRect = '';
 function sendRect() {
   const r = $('main').getBoundingClientRect();
+  const k = [r.left, r.top, r.width, r.height].join();
+  if (k === lastRect) return;
+  lastRect = k;
   hub.rect({ x: r.left, y: r.top, width: r.width, height: r.height });
 }
 new ResizeObserver(sendRect).observe($('main'));
-window.addEventListener('resize', sendRect);
 
 document.querySelectorAll('.nav[data-page]').forEach((n) => { n.onclick = () => show(n.dataset.page); });
 
 function renderSide() {
-  const items = apps.map((a) => {
-    const close = el('span', { className: 'mini close', title: 'Close tab (Ctrl+W)', role: 'button', ariaLabel: 'Close ' + a.name }, icon('x'));
-    close.onclick = (e) => { e.stopPropagation(); closeTab(a.id); };
-    const b = el('button', { className: 'nav' + (page === a.id ? ' on' : ''), onclick: () => show(a.id), title: a.url },
-      avatar(a), el('span', { textContent: a.name }),
-      open.has(a.id) && el('i', { className: 'open-dot' }), open.has(a.id) && close);
-    b.dataset.page = a.id;
-    return b;
-  });
+  $('side-mine').replaceChildren(...mine.map((m) => sideItem(m, el('span', { className: 'app-ico mine' }, icon(m.icon)))));
+  const items = apps.map((a) => sideItem(a, avatar(a)));
   $('side-apps').replaceChildren(...(items.length ? items : [el('div', { className: 'side-empty', textContent: 'Add a website or your own app.' })]));
+}
+function sideItem(a, ico) {
+  const close = el('span', { className: 'mini close', title: 'Close tab (Ctrl+W)', role: 'button', ariaLabel: 'Close ' + a.name }, icon('x'));
+  close.onclick = (e) => { e.stopPropagation(); closeTab(a.id); };
+  const b = el('button', { className: 'nav' + (page === a.id ? ' on' : ''), onclick: () => show(a.id), title: a.url || a.note },
+    ico, el('span', { textContent: a.name }),
+    open.has(a.id) && el('i', { className: 'open-dot' }), open.has(a.id) && close);
+  b.dataset.page = a.id;
+  return b;
 }
 
 // ---------------------------------------------------------------- app tabs (title bar + error page)
@@ -113,16 +145,22 @@ hub.onTabState((s) => { tabs.set(s.id, s); if (s.id === page) paintTab(); });
 
 function paintTab() {
   if (PAGES[page]) return;
-  const a = apps.find((x) => x.id === page);
+  const a = tabApp(page);
   const s = tabs.get(page) || {};
+  const wait = starting.has(page);
   $('nav-back').disabled = !s.canBack;
   $('nav-fwd').disabled = !s.canForward;
   $('tb-loading').hidden = !s.loading;
-  $('tb-url-text').textContent = s.url ? s.url.replace(/^file:\/\/\/.*\/apps\/[^/]+\//, 'App folder › ') : (a ? a.url : '');
-  $('app-error').hidden = !s.failed;
-  if (s.failed && a) {
+  $('tb-url-text').textContent = s.url ? s.url.replace(/^file:\/\/\/.*\/apps\/[^/]+\//, 'App folder › ') : (a && a.url) || '';
+  $('app-error').hidden = !s.failed && !wait;
+  $('app-retry').hidden = $('app-edit').hidden = wait;
+  if (page.startsWith('my-')) $('app-edit').hidden = true; // My Apps can't be edited or removed
+  if (wait && a) {
+    $('app-error-title').textContent = `Starting ${a.name}…`;
+    $('app-error-text').textContent = 'The first start can take up to a minute.';
+  } else if (s.failed && a) {
     $('app-error-title').textContent = `${a.name} didn't load`;
-    $('app-error-text').textContent = friendly(s.failed);
+    $('app-error-text').textContent = s.mine ? s.failed : friendly(s.failed);
   }
 }
 // Chromium's load errors, in words people use.
@@ -141,11 +179,13 @@ $('nav-back').onclick = () => hub.nav(page, 'back');
 $('nav-fwd').onclick = () => hub.nav(page, 'forward');
 $('nav-reload').onclick = () => hub.nav(page, 'reload');
 $('nav-ext').onclick = () => hub.nav(page, 'external');
-$('app-retry').onclick = () => hub.nav(page, 'reload');
+// My Apps: start it again (its address can change, e.g. StarNet picks a new port each start).
+$('app-retry').onclick = () => (page.startsWith('my-') ? (hub.closeTab(page), startMine(page)) : hub.nav(page, 'reload'));
 $('app-edit').onclick = () => openDialog(apps.find((a) => a.id === page));
 
 // ---------------------------------------------------------------- keyboard shortcuts (sent from any page by the main process)
 
+hub.onShow((id) => show(id));
 hub.onShortcut((a) => {
   const ids = order();
   if (a.startsWith('go:')) { const id = ids[+a.slice(3) - 1]; if (id) show(id); }
@@ -208,7 +248,7 @@ $('app-form').onsubmit = async (e) => {
   $('app-dialog').close();
   renderSide();
   if (page === 'home') renderTiles();
-  if (added) { toast(`${added.name} added`); show(added.id); }
+  if (added) { toast(`${added.name} added. Agents get its own connector and key in Settings > Starnet & agents.`, 4000); show(added.id); }
   else if (editing && page === editing.id) { tabs.delete(editing.id); show(editing.id); }
 };
 
@@ -232,12 +272,14 @@ function loadHome() {
   $('today').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   renderTiles();
   paintCfStat();
+  refreshMine();
   refreshInstalls();
   hub.hardware().then((hw) => {
     const gpu = hw.gpus[0];
     $('stat-pc-text').textContent = `${hw.ramGB} GB RAM · ${gpu ? gpu.name.replace(/^NVIDIA |GeForce /g, '') : 'no graphics card found'}`;
   }).catch(() => { $('stat-pc-text').textContent = 'Could not check'; });
-  hub.models().then((m) => { models = m; paintAiStat(); }).catch(() => {});
+  if (models) paintAiStat(); // the Models page keeps this up to date
+  else hub.models().then((m) => { models = m; paintAiStat(); }).catch(() => {});
 }
 
 function paintAiStat() {
@@ -264,7 +306,14 @@ function paintCfStat() {
   }));
 }
 
+const MINE_STATUS = (m) => (starting.has(m.id) ? 'Starting…' : m.running ? '● Running' : m.installed ? 'Click to start' : 'Not found on this PC');
 function renderTiles() {
+  const cfTile = el('button', { className: 'tile', onclick: () => show('clipforge') },
+    el('span', { className: 'app-ico cf' }, icon('scissors')),
+    el('div', {}, el('b', { textContent: 'ClipForge' }), el('span', { className: 'host', textContent: 'Long videos into short clips' })));
+  $('mine-tiles').replaceChildren(cfTile, ...mine.map((m) => el('button', { className: 'tile', onclick: () => show(m.id), title: m.note },
+    el('span', { className: 'app-ico mine' }, icon(m.icon)),
+    el('div', {}, el('b', { textContent: m.name }), el('span', { className: 'host', textContent: MINE_STATUS(m) })))));
   const tiles = apps.map((a) => {
     const edit = el('span', { className: 'mini', title: 'Edit', role: 'button', ariaLabel: 'Edit ' + a.name }, icon('edit'));
     edit.onclick = (e) => { e.stopPropagation(); openDialog(a); };
@@ -337,7 +386,15 @@ hub.onInstallLog(({ id, line }) => {
   if (logs[id].length > 500) logs[id].shift();
   const last = $('last-' + id), pre = $('log-' + id);
   if (last) last.textContent = line;
-  if (pre) { pre.textContent = logs[id].join('\n'); pre.parentElement.hidden = false; pre.scrollTop = pre.scrollHeight; }
+  // installers print many lines a second: draw the log at most once a frame
+  if (pre && !pre.raf) {
+    pre.raf = requestAnimationFrame(() => {
+      pre.raf = 0;
+      pre.textContent = logs[id].join('\n');
+      pre.parentElement.hidden = false;
+      pre.scrollTop = pre.scrollHeight;
+    });
+  }
 });
 
 // ---------------------------------------------------------------- ClipForge
@@ -346,6 +403,7 @@ let cfLoaded = false;   // the frame shows a running ClipForge
 let cfPending = '';     // a project to open once it's ready
 
 hub.onCfState((s) => {
+  if (JSON.stringify(s) === JSON.stringify(cf)) return; // nothing changed: don't rebuild cards under the mouse
   const wasReady = cf.state === 'ready';
   cf = s;
   if (wasReady && s.state !== 'ready') cfLoaded = false; // it went away; reload the frame when it's back
@@ -398,8 +456,8 @@ function modelRow(m, data) {
       m.recommended && el('span', { className: 'badge rec' }, icon('spark'), 'Recommended'),
       m.inUse && el('span', { className: 'badge use' }, icon('check'), 'In use')),
     el('div', { className: 'note', textContent: m.note }));
-  if (b) name.append(el('div', { className: 'note', textContent: b.text || 'starting…' }),
-    el('div', { className: 'bar' }, el('i', { style: `width:${Math.round((b.pct || 0) * 100)}%` })));
+  if (b) name.append(el('div', { className: 'note', id: 'prog-' + key, textContent: b.text || 'starting…' }),
+    el('div', { className: 'bar' }, el('i', { id: 'bar-' + key, style: `width:${Math.round((b.pct || 0) * 100)}%` })));
   const acts = el('div', { className: 'acts' });
   const canGet = m.kind === 'ollama' ? data.ollama : data.cfReady;
   if (m.installed) {
@@ -478,8 +536,12 @@ async function setupRecommended() {
 
 hub.onProgress((p) => {
   if (!busy.has(p.kind + ':' + p.id) || p.text === 'done' || p.text === 'failed') return;
-  busy.set(p.kind + ':' + p.id, { text: p.text, pct: p.pct });
-  if (models && page === 'models') renderModels(models);
+  const key = p.kind + ':' + p.id;
+  busy.set(key, { text: p.text, pct: p.pct });
+  // many events a second during a download: update its row, not the whole page (buttons keep working)
+  const t = document.getElementById('prog-' + key), b = document.getElementById('bar-' + key);
+  if (t && b) { t.textContent = p.text; b.style.width = Math.round((p.pct || 0) * 100) + '%'; }
+  else if (models && page === 'models') renderModels(models);
 });
 
 $('refresh').onclick = loadModels;
@@ -494,13 +556,128 @@ $('ollama-btn').onclick = async () => {
 
 // ---------------------------------------------------------------- Settings
 
+let agent = null, settingsNow = {}, keyShown = false;
+const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : new Date(t).toLocaleString(); };
+const seenText = (a) => a && el('span', { className: 'ok-dot' }, `● Connected: ${a.name}, ${ago(a.at)}`);
+const CONN_ICON = { all: ['box', ''], clipforge: ['scissors', ' cf'], models: ['chip', ''], apps: ['globe', ''], myapps: ['bot', ''] };
+const CONN_NOTE = {
+  all: 'Every app below in one connector.',
+  clipforge: 'Make clips, wait for them, send them to Starnet, transcripts, edits, HyperFrames styles.',
+  models: "This PC's hardware and models: download and switch models.",
+  myapps: 'Is StarNet, FreeLLMAPI or OmniRoute running, and on which port (read only).',
+  apps: 'The list of apps you added (read only).',
+};
+// One row per connector: its address and key to paste into Starnet, Reset, and (per app) the on/off switch.
+function connRow(c) {
+  const [ico, cls] = CONN_ICON[c.scope] || ['globe', ''];
+  const reset = async () => {
+    if (!confirm(`Make a new key for ${c.title}? Agents using the old one stop reaching it until you paste the new key into them ` +
+      '(Starnet: CONNECTED SERVICES → that connector → ✎ EDIT → bearer token → SAVE & RECONNECT).')) return;
+    keyShown = true;
+    paintAgent(await hub.set({ resetKey: c.scope }));
+    copyText(agent.connectors.find((x) => x.scope === c.scope).key, 'New key made and copied - paste it into Starnet');
+  };
+  const sw = c.sw && el('label', { className: 'sw' }, el('input', { type: 'checkbox', checked: !!settingsNow[c.sw], ariaLabel: `Let agents use ${c.title}`,
+    onchange: (e) => hub.set({ [c.sw]: e.target.checked }) }), el('i'));
+  return el('div', { className: 'srow' }, el('span', { className: 'sico' + cls }, icon(ico)),
+    el('span', { className: 'stext' }, el('b', {}, c.title),
+      el('span', {}, CONN_NOTE[c.scope] || 'Your app: its address, is it answering, and open it here (info, check, open).'),
+      el('span', { className: 'mono' }, `Starnet id ${c.id} · ${c.url}`),
+      el('span', { className: 'mono' }, 'Key ' + (keyShown ? c.key : c.key.slice(0, 8) + '•'.repeat(16))),
+      seenText(agent.lastAgent[c.scope]), keyLife(c)),
+    el('select', { ariaLabel: `${c.title} key expires`, title: 'When this key stops working',
+      onchange: (e) => hub.set({ keyDays: { scope: c.scope, days: +e.target.value } }).then(paintAgent) },
+      ...[[0, 'No expiry'], [7, '7 days'], [30, '30 days'], [90, '90 days'], [365, '1 year']].map(([d, t]) =>
+        el('option', { value: d, textContent: t, selected: d === c.days }))),
+    btn('ghost sm', 'Address', () => copyText(c.url, `${c.title} address copied - paste it into the URL box in Starnet`)),
+    btn('ghost sm', 'Key', () => copyText(c.key, `${c.title} key copied - paste it into "bearer token" in Starnet`)),
+    btn('ghost sm danger', 'Reset', reset), sw);
+}
+// "Last used 5 min ago · expires 10 Nov" (or "expired 1 Oct - press Reset")
+function keyLife(c) {
+  const used = c.lastUsed ? `Last used ${ago(c.lastUsed)}` : 'Not used yet';
+  const date = c.expires && new Date(c.expires).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const gone = c.expires && c.expires <= Date.now();
+  return el('span', { className: gone ? 'bad-text' : '' }, used + (date ? (gone ? ` · expired ${date} - press Reset for a new key` : ` · expires ${date}`) : ''));
+}
+// The last 50 calls agents made: when, who, which key, which tool, and whether it worked.
+function paintCalls() {
+  const calls = agent.calls || [];
+  $('calls-n').textContent = calls.length ? `(${calls.length})` : '(none yet)';
+  const title = (scope) => (agent.connectors.find((c) => c.scope === scope) || {}).title || scope;
+  $('agent-calls').replaceChildren(...calls.map((c) => el('div', { className: 'call' + (c.ok ? '' : ' bad') },
+    el('span', { className: 'muted', textContent: new Date(c.at).toLocaleTimeString() }),
+    el('span', { textContent: c.client }), el('span', { className: 'muted', textContent: title(c.scope) }),
+    el('span', { className: 'mono', textContent: c.tool }),
+    el('span', { textContent: (c.ok ? '✓' : '✗ failed') + (c.ms >= 1000 ? ` · ${Math.round(c.ms / 1000)} s` : '') }))));
+}
+hub.onAgentCall((c) => { if (agent) { agent.calls = [c, ...(agent.calls || [])].slice(0, 50); paintCalls(); } });
+function paintSeen() {
+  const last = Object.values(agent.lastAgent).sort((a, b) => b.at - a.at)[0];
+  $('agent-seen').replaceChildren(seenText(last)
+    || (agent.starnet ? 'Found on this PC, not connected yet. Follow the steps below.' : 'Not found on this PC. Install Starnet, then follow the steps below.'));
+}
+function paintAgent(info) {
+  agent = info.agent;
+  settingsNow = info.settings;
+  $('agent-show').textContent = keyShown ? 'Hide keys' : 'Show keys';
+  $('agent-conns').replaceChildren(...agent.connectors.map(connRow));
+  paintCalls();
+  $('agent-drop').textContent = agent.dropDir;
+  $('agent-open').hidden = !agent.starnetApp;
+  $('agent-url').textContent = `App Hub API: ${agent.url} (running while App Hub is open)`;
+  for (const b of document.querySelectorAll('[data-agent]')) b.checked = !!info.settings[b.dataset.agent];
+  const tg = info.settings;
+  $('tg-state').textContent = tg.telegramToken && tg.telegramChat ? `Bot ${tg.telegramToken} → chat ${tg.telegramChat}`
+    : 'Sent by your Telegram bot (the one Starnet uses works) to your chat.';
+  $('tg-token').placeholder = tg.telegramToken ? `Saved (${tg.telegramToken}) - paste a new one to change it` : 'Bot token, e.g. 123456789:AAH… (from @BotFather)';
+  if (!$('tg-chat').value) $('tg-chat').value = tg.telegramChat || '';
+  $('dc-state').textContent = tg.discordHook ? `Posts to ${tg.discordHook}` : 'The same message, posted to a Discord channel.';
+  $('dc-hook').placeholder = tg.discordHook ? 'Saved - paste a new webhook address to change it' : 'Webhook address: https://discord.com/api/webhooks/…';
+  paintSeen();
+}
+const copyText = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('Could not copy'));
+$('agent-show').onclick = () => { keyShown = !keyShown; hub.info().then(paintAgent); };
+$('agent-copytimeout').onclick = () => copyText('600000', 'Copied 600000');
+$('agent-mcp').onclick = () => copyText(JSON.stringify(agent.mcp, null, 2), 'MCP config copied - paste it into .mcp.json');
+$('tg-save').onclick = async () => {
+  const r = await hub.set({ telegram: { token: $('tg-token').value, chat: $('tg-chat').value } });
+  if (r.error) return toast(r.error, 5000);
+  $('tg-token').value = '';
+  paintAgent(r);
+  toast('Telegram saved. Click Send test to check it.');
+};
+$('dc-save').onclick = async () => {
+  const r = await hub.set({ discord: { hook: $('dc-hook').value } });
+  if (r.error) return toast(r.error, 5000);
+  $('dc-hook').value = '';
+  paintAgent(r);
+  toast('Discord saved. Click Send test to check it.');
+};
+$('dc-test').onclick = async () => {
+  $('dc-test').disabled = true;
+  const r = await hub.discordTest();
+  $('dc-test').disabled = false;
+  toast(r.ok ? 'Sent - check Discord' : r.error, r.ok ? 2600 : 6000);
+};
+$('tg-test').onclick = async () => {
+  $('tg-test').disabled = true;
+  const r = await hub.telegramTest();
+  $('tg-test').disabled = false;
+  toast(r.ok ? 'Sent - check Telegram' : r.error, r.ok ? 2600 : 6000);
+};
+document.querySelectorAll('[data-agent]').forEach((b) => { b.onchange = () => hub.set({ [b.dataset.agent]: b.checked }); });
+hub.onAgentSeen((seen) => { if (agent) { agent.lastAgent = seen; hub.info().then(paintAgent); } });
+
 async function loadSettings() {
   const info = await hub.info();
+  paintAgent(info);
   $('set-login').checked = info.openAtLogin;
   $('set-notify').checked = info.settings.notifications;
   $('set-where').textContent = `ClipForge, its tools and models live in ${info.cfDir}`;
   $('about').textContent = `App Hub ${info.version}`;
   paintSetCf();
+  paintClean();
 }
 function paintSetCf() {
   const n = cf.projects.length;
@@ -510,6 +687,24 @@ function paintSetCf() {
 $('set-login').onchange = (e) => hub.set({ openAtLogin: e.target.checked }).then(() => toast(e.target.checked ? 'App Hub will start with Windows' : 'App Hub won\'t start with Windows'));
 $('set-notify').onchange = (e) => hub.set({ notifications: e.target.checked });
 $('set-cf-restart').onclick = () => { hub.cfRestart(); cf.state = 'starting'; paintSetCf(); paintCf(); toast('Restarting ClipForge…'); };
+// Free up space: shows what the choice would free, then deletes after a confirm.
+async function paintClean() {
+  const p = await hub.cleanPlan($('clean-days').value);
+  const what = [p.videos && `${p.videos} video${p.videos === 1 ? '' : 's'}`, p.copies && `${p.copies} Starnet cop${p.copies === 1 ? 'y' : 'ies'}`].filter(Boolean);
+  $('clean-text').textContent = what.length ? `${what.join(' and ')} · frees ${p.size}` : 'Nothing to delete for this choice.';
+  $('clean-go').disabled = !what.length;
+  return p;
+}
+$('clean-days').onchange = paintClean;
+$('clean-go').onclick = async () => {
+  const p = await paintClean();
+  if (!p.videos && !p.copies) return;
+  if (!confirm(`Delete ${$('clean-text').textContent.split(' · ')[0]} and free ${p.size}? This can't be undone.`)) return;
+  const r = await hub.cleanRun($('clean-days').value);
+  toast(`Deleted ${r.deleted} folder${r.deleted === 1 ? '' : 's'}, freed ${r.size}`, 4000);
+  paintClean();
+};
+
 document.querySelectorAll('[data-open]').forEach((b) => {
   b.onclick = async () => { const err = await hub.open(b.dataset.open); if (err) toast(err.includes('exist') ? 'Nothing there yet' : err, 3500); };
 });
@@ -517,7 +712,8 @@ document.querySelectorAll('[data-open]').forEach((b) => {
 // ---------------------------------------------------------------- start
 
 (async () => {
-  [apps, cf, installs] = await Promise.all([hub.apps(), hub.cfState(), hub.installState()]);
+  // only the instant calls before the first draw; Home fills in My Apps and installs as they answer
+  [apps, cf] = await Promise.all([hub.apps(), hub.cfState()]);
   renderSide();
   show('home');
 })();

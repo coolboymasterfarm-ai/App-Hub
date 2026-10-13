@@ -35,6 +35,7 @@
     <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
     <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14 9l2 2"/></symbol>
     <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/></symbol>
   </svg>
 
@@ -56,10 +57,14 @@
     <nav class="side" aria-label="App Hub">
       <div class="side-sec">
         <button class="nav" data-page="home"><svg class="i"><use href="#i-home"/></svg><span>Home</span></button>
-        <button class="nav" data-page="clipforge"><span class="app-ico cf"><svg class="i"><use href="#i-scissors"/></svg></span><span>ClipForge</span><i class="state" id="cf-dot"></i></button>
         <button class="nav" data-page="models"><svg class="i"><use href="#i-chip"/></svg><span>AI Models</span></button>
       </div>
-      <div class="side-head"><span>Your apps</span><button class="mini" id="side-add" title="Add app" aria-label="Add app"><svg class="i"><use href="#i-plus"/></svg></button></div>
+      <div class="side-head"><span>My Apps</span></div>
+      <div class="side-sec">
+        <button class="nav" data-page="clipforge"><span class="app-ico cf"><svg class="i"><use href="#i-scissors"/></svg></span><span>ClipForge</span><i class="state" id="cf-dot"></i></button>
+        <div class="side-apps mine" id="side-mine"></div>
+      </div>
+      <div class="side-head"><span>Other Apps</span><button class="mini" id="side-add" title="Add app" aria-label="Add app"><svg class="i"><use href="#i-plus"/></svg></button></div>
       <div class="side-apps" id="side-apps"></div>
       <div class="side-foot">
         <button class="nav" data-page="settings"><svg class="i"><use href="#i-gear"/></svg><span>Settings</span></button>
@@ -101,7 +106,12 @@
           </section>
 
           <section>
-            <div class="sec-head"><h2>Your apps</h2><span class="muted small">Websites, local tools or your own app folders, each in its own tab.</span></div>
+            <div class="sec-head"><h2>My Apps</h2><span class="muted small">Your own apps. App Hub starts them and opens each in its own tab.</span></div>
+            <div class="tiles" id="mine-tiles"></div>
+          </section>
+
+          <section>
+            <div class="sec-head"><h2>Other Apps</h2><span class="muted small">Apps from other companies and GitHub repos: websites, local tools or app folders.</span></div>
             <div class="tiles" id="tiles"></div>
           </section>
         </div>
@@ -162,7 +172,66 @@
               <button class="btn ghost" data-open="log"><svg class="i"><use href="#i-info"/></svg>ClipForge log</button>
               <button class="btn ghost" data-open="hub"><svg class="i"><use href="#i-folder"/></svg>App Hub data</button>
             </div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-trash"/></svg></span>
+              <span class="stext"><b>Free up space</b><span id="clean-text">Deletes finished videos and the clip copies sent to Starnet's agents.</span></span>
+              <select id="clean-days" aria-label="Which videos">
+                <option value="30">Older than 30 days</option><option value="7">Older than 7 days</option>
+                <option value="90">Older than 90 days</option><option value="0">All finished videos</option></select>
+              <button class="btn ghost sm danger" id="clean-go">Delete…</button></div>
             <p class="muted small" id="set-where"></p>
+          </div>
+          <div class="card set" id="agents">
+            <h3>Starnet &amp; agents</h3>
+            <p class="muted small">Lets AI agents on this PC (your Starnet crew, Claude Code) use App Hub's apps as tools. Each app is its own
+              connector with its own key, so an agent only gets the apps you give it: a ClipForge key can't touch AI Models. Only programs on
+              this PC can connect.</p>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bot"/></svg></span>
+              <span class="stext"><b>Starnet</b><span id="agent-seen">…</span></span>
+              <button class="btn ghost sm" id="agent-show">Show keys</button>
+              <button class="btn ghost sm" data-open="starnet" id="agent-open" hidden>Open Starnet</button></div>
+            <div id="agent-conns"></div>
+            <details class="calls"><summary>Recent agent calls <span class="muted small" id="calls-n"></span></summary>
+              <div id="agent-calls"></div></details>
+            <div class="steps">
+              <b>Connect Starnet (one time)</b>
+              <ol>
+                <li>In Starnet, open <b>CONNECT</b> → <b>ABILITIES</b> → <b>CONNECTED SERVICES</b> → <b>ADD A CONNECTOR</b>.</li>
+                <li>Add one connector for each app you want your agents to use. Use the <b>Starnet id</b> shown above
+                  (<span class="mono">clipforge</span>, <span class="mono">aimodels</span>, <span class="mono">otherapps</span>) and choose <b>HTTP</b>.</li>
+                <li>Paste that app's <b>Address</b> into the URL box and its <b>Key</b> into <b>bearer token</b>.</li>
+                <li>Open <b>advanced</b> and set <b>timeout ms</b> to <span class="mono">600000</span> <button class="btn ghost sm" id="agent-copytimeout">Copy</button> so a video can finish in one call.</li>
+                <li>Click <b>+ ADD &amp; CONNECT</b>. Starnet should say <b>connected</b>, and that app's row here shows "● Connected".</li>
+              </ol>
+              <span class="muted small">Prefer one connector? Use <b>All apps</b> (id <span class="mono">apphub</span>) instead.
+                Schedules: on each Starnet routine that uses App Hub, tick <b>Let this routine use your connected tools</b>.
+                After <b>Reset</b>: in Starnet, <b>CONNECTED SERVICES</b> → that connector → <b>✎ EDIT</b>, paste the new key, <b>SAVE &amp; RECONNECT</b>.</span>
+            </div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Tell Starnet when videos finish</b><span>Leaves a note in <span class="mono" id="agent-drop">…</span>. Point a Starnet work line's folder trigger at it.</span></span>
+              <button class="btn ghost sm" data-open="drop">Open</button>
+              <label class="sw"><input type="checkbox" data-agent="starnetDrop" aria-label="Tell Starnet when videos finish"><i></i></label></div>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Telegram message when a video finishes</b>
+              <span id="tg-state">Sent by your Telegram bot (the one Starnet uses works) to your chat.</span></span>
+              <label class="sw"><input type="checkbox" data-agent="telegramOn" aria-label="Telegram message when a video finishes"><i></i></label></div>
+            <div class="tg-form">
+              <input id="tg-token" placeholder="Bot token, e.g. 123456789:AAH… (from @BotFather)" autocomplete="off" spellcheck="false">
+              <input id="tg-chat" placeholder="Your chat ID, e.g. 123456789" autocomplete="off" spellcheck="false">
+              <button class="btn ghost sm" id="tg-save">Save</button>
+              <button class="btn ghost sm" id="tg-test">Send test</button>
+            </div>
+            <p class="muted small">Chat ID: message <span class="mono">@userinfobot</span> on Telegram and it replies with yours. Message your bot once first, or it can't write to you.</p>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-bell"/></svg></span><span class="stext"><b>Discord message when a video finishes</b>
+              <span id="dc-state">The same message, posted to a Discord channel.</span></span>
+              <label class="sw"><input type="checkbox" data-agent="discordOn" aria-label="Discord message when a video finishes"><i></i></label></div>
+            <div class="tg-form">
+              <input id="dc-hook" placeholder="Webhook address: https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
+              <button class="btn ghost sm" id="dc-save">Save</button>
+              <button class="btn ghost sm" id="dc-test">Send test</button>
+            </div>
+            <p class="muted small">In Discord: the channel → <b>Edit Channel</b> → <b>Integrations</b> → <b>Webhooks</b> → <b>New Webhook</b> → <b>Copy Webhook URL</b>.</p>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-box"/></svg></span>
+              <span class="stext"><b>Claude Code</b><span>Copies the MCP config: one server per app, each with its own key. Paste it into <span class="mono">.mcp.json</span> in your project folder, then restart Claude Code.</span></span>
+              <button class="btn ghost sm" id="agent-mcp">Copy config</button></div>
+            <p class="muted small" id="agent-url"></p>
           </div>
           <div class="card set">
             <h3>Keyboard shortcuts</h3>

@@ -60,16 +60,30 @@ def create(kind: str, value: str, name: str = "", topic: str = "",
     return p
 
 
+# project.json path -> ((modified time, size), its summary). The page asks for the list every few seconds,
+# so only projects whose file changed are read again.
+_LISTED: Dict[str, Any] = {}
+
+
 def listing() -> List[Dict[str, Any]]:
-    out = []
+    out, seen = [], set()
     if config.PROJECTS.exists():
         for f in config.PROJECTS.glob("*/project.json"):
+            key = str(f)
             try:
-                p = json.loads(f.read_text(encoding="utf-8"))
-                out.append({k: p.get(k) for k in ("id", "title", "status", "created", "error",
-                                                  "thumb")} | {"clips": len(p["clips"])})
+                st = f.stat()
+                stamp = (st.st_mtime_ns, st.st_size)
+                hit = _LISTED.get(key)
+                if not hit or hit[0] != stamp:
+                    p = json.loads(f.read_text(encoding="utf-8"))
+                    hit = _LISTED[key] = (stamp, {k: p.get(k) for k in ("id", "title", "status", "created", "error",
+                                                                        "thumb")} | {"clips": len(p["clips"])})
             except (OSError, ValueError, KeyError):
                 continue
+            seen.add(key)
+            out.append(dict(hit[1]))
+    for gone in set(_LISTED) - seen:                # deleted projects
+        _LISTED.pop(gone, None)
     return sorted(out, key=lambda p: p["created"] or 0, reverse=True)
 
 
@@ -200,11 +214,13 @@ def _render_one(jid: str, p: Dict[str, Any], c: Dict[str, Any], words, lo: float
                         log=lambda m: jobs.log(jid, m))
     except jobs.Cancelled:
         c["state"] = "queued" if not c.get("file") else "done"
+        _clean_work(work)
         raise
     except Exception as exc:
         c["state"], c["error"] = "error", str(exc)[:300]
         jobs.log(jid, f"Clip {c['n']} failed: {exc}")
         save(p)
+        _clean_work(work)
         return
     old = {k: c.get(k) for k in _FILES}
     c.update(_companions(jid, p, c, r, out, work), file=f"clips/{out.name}", state="done",
@@ -213,7 +229,17 @@ def _render_one(jid: str, p: Dict[str, Any], c: Dict[str, Any], words, lo: float
     save(p)
     for f in set(old.values()) - {c.get(k) for k in _FILES} - {None}:   # the previous version
         (d / f).unlink(missing_ok=True)
+    _clean_work(work)
+
+
+def _clean_work(work: Path) -> None:
+    """A render's temp files (base video, overlay, fonts) can be hundreds of MB: delete them whatever happened,
+    and the project's work/ folder too once it's empty."""
     shutil.rmtree(work, ignore_errors=True)
+    try:
+        work.parent.rmdir()
+    except OSError:
+        pass                                      # another clip is still rendering in it
 
 
 _FILES = ("file", "thumb", "srt", "cover")      # what a rendered clip is made of on disk

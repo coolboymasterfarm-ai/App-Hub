@@ -35,8 +35,78 @@ inside the hub, and the user clicks between tabs instead of jumping between sepa
     restart ClipForge, open folders), keyboard shortcuts via before-input-event, ClipForge finish notifications.
 14. ClipForge: redesigned UI, transcript -> make your own clip, clip player, sort/search/delete, local-only API guard.
 
+## Version 1.3 - agents (Bryce asked: Starnet agents should use App Hub's apps)
+15. App Hub API (src/agentapi.js): http://127.0.0.1:8770, one key (Settings > Agent access: show, copy, new key) plus a
+    switch per app (ClipForge, AI Models, Your apps). Refuses requests without the key, with an Origin (browsers) or
+    a foreign Host. ClipForge's API is passed through under /v1/clipforge/.
+16. MCP connector (mcp.js, copied to userData on start): Claude Code gets App Hub's apps as tools. Settings has
+    "Copy config" for .mcp.json; it runs with App Hub's own Node (ELECTRON_RUN_AS_NODE) and reads the current key.
+
+## Version 1.4 - Starnet (Bryce asked: make it work with github.com/androoAGI/starnet for automation and scheduling)
+17. POST /mcp on the App Hub API (MCP over HTTP, stateless JSON). Starnet's installed app refuses stdio connectors on
+    the host, so it connects here (CONNECTED SERVICES, HTTP, bearer token = the key). Tools live in mcp-tools.js,
+    shared with mcp.js. Tool failures are isError results (HTTP 200), never protocol errors.
+18. One-call workflows (Starnet allows ONE connector call per unattended run): clipforge_make_clips can take a
+    channel's newest upload, skip a video it already did, wait up to 9.5 min, and copy the best clips into a Starnet
+    agent's folder (src/starnet.js; Starnet only sends files from there, max 20 MB). clipforge_wait_for_video resumes.
+19. Settings "Starnet & agents": connector address, key (Show/Copy/Reset key), setup steps, last connection, per-app
+    switches, and "Tell Starnet when videos finish" (a JSON note in Documents\App Hub\Starnet inbox for a Starnet
+    folder trigger). Repo folder starnet/: setup guide, skill package (make-skill-package.js), recipes.
+
+## Version 1.5 - Starnet, better (Bryce asked: keep improving it with Starnet; do NOT install Starnet from App Hub)
+20. Clip answers carry what agents post with: caption (hashtags), why, said, cover; `best` limits the answer too.
+21. Several videos (one per line, up to 10) in one call, sharing one deadline. Clips over 20 MB get an ffmpeg copy
+    that fits Telegram when sent to Starnet; covers are copied too.
+22. app_hub_status: ready_to_clip + ClipForge's doctor warnings + videos in progress. "Open Starnet" in Settings
+    (only when its shortcut exists). Recipe: Clips + posts for my socials.
+
+23. Less RAM with many apps (1.5.1): app tabs not looked at for 10 min, or the oldest beyond 5 awake, go to sleep
+    (closed, src/sleep.js) and reopen at the same address when clicked. Tabs playing sound stay awake.
+
+## Version 1.6 - My Apps (Bryce asked: StarNet, FreeLLMAPI and OmniRoute inside App Hub, like apps)
+24. Sidebar and Home have two groups: "My Apps" (ClipForge, StarNet, FreeLLMAPI, OmniRoute) and "Other Apps"
+    (the apps the user adds: other companies' sites, GitHub repos, folders). src/myapps.js says where each of
+    Bryce's apps is and what address its page is on. Clicking one starts its own program (hidden where it can,
+    never installed or changed by App Hub) and opens that page in a normal app tab. They keep running after App
+    Hub closes, because other tools use them. StarNet picks a new port each start (read from its startup.log).
+    OmniRoute runs as `node <its package.json bin> --no-open` with this PC's Node, hidden: never omniroute.cmd, so no
+    CMD window. Survives updates: everything is looked up fresh on each click (bin from package.json, ports from the
+    apps' own files, and the Start menu shortcut if an update moved the program).
+    OmniRoute is started in the background when App Hub opens (it takes ~30 s); a slow app is waited for (5 s per
+    check, 2 min in all) so a second copy is never started.
+
+## Version 1.8 - speed, cleanup, Telegram, key log, My Apps status (Bryce's list of 11 Oct)
+25. Speed: ClipForge's page redraws only what changed (list, and only the changed clip cards - the rest keep their
+    video element); every <video> is preload="none". pipeline.listing() re-reads only project.json files whose
+    modified time/size changed. Whisper stays loaded between videos (one model at a time), Ollama gets keep_alive,
+    media.probe() is cached per file, and a render's work/ temp folder is deleted however the render ended.
+    App tabs: spellcheck off, dark background while loading.
+26. Settings > ClipForge > Free up space (src/cleanup.js): finished videos older than 7/30/90 days (or all finished), plus
+    the clip copies in Starnet's workspaces\<agent>\clipforge\<id> (older than that, or whose video goes). Shows how much
+    it frees (a hard-linked file counts only if every link goes), asks to confirm. A video being made is never deleted.
+27. Telegram (src/telegram.js): when a video finishes, a short message ("Clips ready: <title> · N clips. Best: ...") from
+    a bot token + chat ID the user saves in Settings > Starnet & agents (the bot Starnet uses works: App Hub only
+    sends, never reads updates). Token checked before saving, kept in hub-settings.json, shown to the page masked.
+    "Send test" button. Bryce enters the token himself.
+28. Keys (src/keylog.js): each connector key shows "Last used ..." and can expire (No expiry / 7 / 30 / 90 days / 1 year,
+    counted from when the key was made or Reset). An expired key gets a 401 that says how to make a new one.
+    "Recent agent calls": the last 50 calls (time, agent, key, tool or /v1 path, worked or failed, time taken),
+    saved in userData/agent-log.json.
+29. My Apps for agents: its own connector (/mcp/myapps, Starnet id myapps), key and switch. One read-only tool,
+    running (myapps_running in the all-apps connector): installed/running/port/address per app, plus the OpenAI-style
+    API address for FreeLLMAPI and OmniRoute. It never starts or stops them.
+30. Every app the user adds gets its own connector (src/appconnectors.js): /mcp/<app id>, its own key (made when the app
+    is added, deleted when it's removed), a Starnet id from its name, and a Claude Code server. Tools: status, info
+    (name, address), check (is it answering), open (shows it in its App Hub tab). The Other Apps switch covers them.
+31. Discord (src/discord.js), next to Telegram: the same "clips ready" message posted through a channel webhook the user
+    pastes in Settings. Checked before saving (discord.com/api/webhooks/...), shown masked, Send test.
+
+32. StarNet is no longer a tab in My Apps (Bryce, 11 Oct): in a tab it can't use its keychain, so provider settings such
+    as a custom endpoint don't work there. It stays in myapps.js with tab: false - agents still see it in the My
+    Apps connector, and StarNet still connects to App Hub's connectors. Settings keeps "Open Starnet".
+
 ## NOT built yet (do not build, even if it seems small)
-API key manager, accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
+Accounts/sign-in, app store/catalog, light theme, sync, auto-update, code signing, running native
 .exe programs inside a tab, drag-to-reorder. Write any good idea for later in /ideas/app-hub-later.md instead.
 
 ## Tech (decided - change only with Bryce's OK)
