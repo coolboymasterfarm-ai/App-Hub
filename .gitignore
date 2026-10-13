@@ -18,3 +18,5 @@ ClipForge/data/projects/
 ClipForge/tests/output/
 # Any file >50MB (git will reject automatically but list for clarity)
 ClipForge/**/bin/*
+# Built by npm run build:apps (React builds)
+build/

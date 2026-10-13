@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import TextEditor from './components/TextEditor';
-import Toolbar from './components/Toolbar';
 import StatisticsPanel from './components/StatisticsPanel';
 import SettingsModal from './components/SettingsModal';
 import { useDarkMode } from './hooks/useDarkMode';
-import { LanguageContext } from './context/LanguageContext';
+import { LanguageProvider } from './context/LanguageContext';
 
 function App() {
   const [text, setText] = useState('');
@@ -13,7 +12,7 @@ function App() {
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 ${darkMode ? 'dark' : ''}`}>
-      <LanguageContext.Provider value={{ language: 'en-US', setLanguage: () => {} }}>
+      <LanguageProvider>
         <header className="bg-white dark:bg-gray-800 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
@@ -60,7 +59,7 @@ function App() {
           isOpen={isSettingsOpen}
           onRequestClose={() => setIsSettingsOpen(false)}
         />
-      </LanguageContext.Provider>
+      </LanguageProvider>
     </div>
   );
 }

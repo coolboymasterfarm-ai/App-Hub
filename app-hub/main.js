@@ -10,6 +10,7 @@ const agentapi = require('./src/agentapi');
 const starnet = require('./src/starnet');
 const sleep = require('./src/sleep');
 const myapps = require('./src/myapps');
+myapps.BUNDLED.dir = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'); // Grammar, Agent Dashboard
 const cleanup = require('./src/cleanup');
 const telegram = require('./src/telegram');
 const discord = require('./src/discord');
@@ -497,7 +498,8 @@ async function startMineNow(id) {
   const exe = exeOf(a);
   if (!exe) return { ok: false, error: a.missing || `${a.name} isn't on this PC. Install it, then click Try again.` };
   // detached: it keeps running when App Hub closes. hidden: a console program (OmniRoute's Node) shows no window.
-  const p = spawn(exe, a.args || [], { cwd: path.dirname(a.args && a.args[0] ? a.args[0] : exe), detached: true, stdio: 'ignore', windowsHide: !!a.hidden });
+  const p = spawn(exe, a.args || [], { cwd: path.dirname(a.args && a.args[0] ? a.args[0] : exe), detached: true, stdio: 'ignore',
+    windowsHide: !!a.hidden, env: { ...process.env, ...a.env } });
   let error = null;
   p.on('error', (e) => { error = e.message; });
   p.unref();

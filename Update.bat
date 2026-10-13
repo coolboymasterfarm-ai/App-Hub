@@ -23,6 +23,7 @@ git pull || (echo  [!] Could not get the latest code - see the message above. & 
 echo  [2/4] Building the installer ^(a few minutes the first time^)...
 cd app-hub
 call npm install --no-audit --no-fund --loglevel=error || (echo  [!] npm install failed - see above. & pause & exit /b 1)
+call npm run build:apps || (echo  [!] Building Grammar / Agent Dashboard failed - see above. & pause & exit /b 1)
 if exist dist rmdir /s /q dist
 call node_modules\.bin\electron-builder --win nsis --publish never || (echo  [!] The build failed - see above. & pause & exit /b 1)
 

@@ -42,6 +42,10 @@ jobs:
           cache-dependency-path: app-hub/package-lock.json
       - run: npm ci
       - run: npm test
+      # Grammar and Agent Dashboard ship inside App Hub (My Apps); CI=false: their React build must not stop on warnings
+      - run: npm run build:apps
+        env:
+          CI: 'false'
       - run: npx electron-builder --win nsis portable --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

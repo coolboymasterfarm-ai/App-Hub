@@ -80,7 +80,7 @@ const Toolbar: React.FC = () => {
             <option value="es">Spanish</option>
             <option value="fr">French</option>
             <option value="de">German</option>
-            <option value="it">Italian</>
+            <option value="it">Italian</option>
             <option value="pt">Portuguese</option>
             <option value="nl">Dutch</option>
             <option value="ru">Russian</option>

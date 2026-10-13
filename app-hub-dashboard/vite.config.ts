@@ -1,15 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 
+// Tailwind 3 runs through PostCSS (postcss.config.cjs). server.js serves dist/ and the /api routes.
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react()],
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    proxy: { '/api': 'http://localhost:5001' },
   },
-  build: {
-    outDir: '../../dist/dashboard',
-    assetsDir: 'assets'
-  }
+  build: { outDir: 'dist' },
 })
