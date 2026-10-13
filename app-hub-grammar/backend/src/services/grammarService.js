@@ -2,7 +2,8 @@ const axios = require('axios');
 
 class GrammarService {
   constructor() {
-    this.languagetoolUrl = process.env.LANGUAGETOOL_URL || 'http://localhost:8010/v2';
+    // no local LanguageTool server: LanguageTool's free public one (limited to about 20 checks a minute)
+    this.languagetoolUrl = process.env.LANGUAGETOOL_URL || 'https://api.languagetool.org/v2';
     this.huggingfaceApiKey = process.env.HUGGINGFACE_API_KEY;
     this.hfApiUrl = 'https://api-inference.huggingface.co/models';
   }

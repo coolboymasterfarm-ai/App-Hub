@@ -1,9 +1,10 @@
+require('dotenv').config(); // first: grammarService reads LANGUAGETOOL_URL when it loads
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const grammarService = require('./services/grammarService');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,9 +16,8 @@ app.use(morgan('dev'));
 app.use(express.json());
 
 // Routes
-app.get('/', (req, res) => {
-  res.json({ message: 'App Hub Grammar API is running' });
-});
+// The built page (frontend: npm run build), so App Hub opens the whole app at one address.
+app.use(express.static(path.join(__dirname, '..', '..', 'frontend', 'build')));
 
 // Grammar checking route
 app.post('/api/check', async (req, res) => {
@@ -169,9 +169,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, '127.0.0.1', () => console.log(`Server is running on port ${PORT}`));
+}
 
 // Export for testing
 module.exports = app;

@@ -251,6 +251,9 @@ setInterval(() => {
   }
 }, 5000);
 
-app.listen(PORT, () => {
+// The built page (npm run build), so App Hub opens the whole dashboard at one address.
+app.use(express.static(require('path').join(__dirname, 'dist')));
+
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`Mock API server running on http://localhost:${PORT}`);
 });
