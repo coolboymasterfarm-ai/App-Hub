@@ -15,7 +15,7 @@ const CHAT = [
   { id: 'llama3.2:3b', size: 2.0, note: 'Small and quick.' },
   { id: 'qwen3:4b', size: 2.5, note: 'Best small model. Good on CPU-only PCs.' },
   { id: 'gemma3:4b', size: 3.3, note: 'Small Google model.' },
-  { id: 'qwen3:8b', size: 5.2, note: 'The model ClipForge was tuned with.' },
+  { id: 'qwen3:8b', size: 5.2, note: 'The model ClipForge was tuned with, and Starnet\'s pick for its agents.' },
   { id: 'llama3.1:8b', size: 4.9, note: 'Solid all-rounder.' },
   { id: 'gemma3:12b', size: 8.1, note: 'Strong writer for titles and captions.' },
   { id: 'qwen3:14b', size: 9.3, note: 'Smarter clip picks. Wants 12 GB+ VRAM.' },

@@ -143,7 +143,8 @@ def _ollama(system, user, want_json, timeout, model) -> Tuple[str, str]:
     body: Dict[str, Any] = {"model": model, "stream": False, "think": False,
                             "messages": [{"role": "system", "content": system},
                                          {"role": "user", "content": user}],
-                            "options": {"temperature": 0.5, "num_ctx": 8192}}
+                            "options": {"temperature": 0.5, "num_ctx": 8192},
+                            "keep_alive": "15m"}      # stay loaded between a video's calls and the next video
     if want_json:
         body["format"] = "json"
     r = requests.post(base + "/api/chat", json=body, timeout=timeout)

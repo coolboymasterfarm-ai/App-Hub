@@ -1,0 +1,2 @@
+# Starnet checks the skill package by its exact bytes: keep these files as they are on every OS.
+starnet/** -text

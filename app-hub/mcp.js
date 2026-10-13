@@ -1,0 +1,55 @@
+// App Hub MCP connector over stdio, for Claude Code / Claude Desktop. (Starnet connects over HTTP
+// instead: http://127.0.0.1:8770/mcp/<app>.) It calls the App Hub API on this PC, so App Hub must be running.
+// Settings > Starnet & agents > Claude Code copies the ready-made config: one server per app (APP_HUB_APP),
+// each with that app's own key. Without APP_HUB_APP it serves every app with the all-apps key.
+const fs = require('fs');
+const http = require('http');
+const path = require('path');
+const { tools, forApp, forUserApp, instructions, rpc, APPS } = require('./mcp-tools');
+
+const BASE = process.env.APP_HUB_URL || 'http://127.0.0.1:8770';
+const USER_APP = /^app-[a-z0-9]+$/.test(process.env.APP_HUB_APP || ''); // an app the user added to App Hub
+const APP = APPS[process.env.APP_HUB_APP] || USER_APP ? process.env.APP_HUB_APP : null;
+const title = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'apps.json'), 'utf8')).find((a) => a.id === APP).name; } catch { return 'An app'; } };
+// mcp.js is copied next to hub-settings.json, so a key reset in App Hub needs no config change here.
+function key() {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(__dirname, 'hub-settings.json'), 'utf8'));
+    return (APP ? (s.appKeys || {})[APP] : s.agentKey) || process.env.APP_HUB_KEY || '';
+  } catch { return process.env.APP_HUB_KEY || ''; }
+}
+
+// http.request, not fetch: fetch gives up after 5 silent minutes, and making clips can wait up to 9.5.
+function api(method, p, body) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(BASE + p, { method, headers: { Authorization: 'Bearer ' + key(), 'Content-Type': 'application/json' } }, (res) => {
+      let d = '';
+      res.on('data', (c) => { d += c; });
+      res.on('end', () => {
+        let data = {};
+        try { data = JSON.parse(d); } catch { /* not JSON */ }
+        if (res.statusCode >= 400) reject(new Error(data.error || data.detail || `App Hub said ${res.statusCode}`));
+        else resolve(data);
+      });
+    });
+    req.on('error', () => reject(new Error('App Hub is not running on this PC. Open App Hub and try again.')));
+    req.end(body ? JSON.stringify(body) : undefined);
+  });
+}
+
+const list = USER_APP ? forUserApp(tools(api), APP) : APP ? forApp(tools(api), APP) : tools(api);
+const out = (m) => m && process.stdout.write(JSON.stringify(m) + '\n');
+
+let buf = '';
+process.stdin.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\n')) >= 0) {
+    const line = buf.slice(0, i).trim();
+    buf = buf.slice(i + 1);
+    if (!line) continue;
+    let msg;
+    try { msg = JSON.parse(line); } catch { out({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }); continue; }
+    rpc(msg, list, { instructions: USER_APP ? instructions(APP, title()) : instructions(APP) }).then(out);
+  }
+});

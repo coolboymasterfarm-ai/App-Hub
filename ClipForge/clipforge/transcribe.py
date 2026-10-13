@@ -10,6 +10,7 @@ from __future__ import annotations
 import glob
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -53,17 +54,28 @@ def model_name(dev: str) -> str:
     return "large-v3-turbo" if dev == "cuda" else "small"
 
 
+# Loaded models stay in memory between videos (loading one takes seconds to a minute).
+_MODELS: Dict[tuple, Any] = {}
+_LOAD_LOCK = threading.Lock()
+
+
 def _load(dev: str):
-    from faster_whisper import WhisperModel
     name = model_name(dev)
+    with _LOAD_LOCK:
+        if (dev, name) not in _MODELS:
+            _MODELS.clear()                       # only one model at a time: a new pick frees the old one
+            _MODELS[(dev, name)] = _new_model(dev, name)
+        return _MODELS[(dev, name)], name
+
+
+def _new_model(dev: str, name: str):
+    from faster_whisper import WhisperModel
     root = config.DATA / "models" / "whisper"
     root.mkdir(parents=True, exist_ok=True)
     if dev == "cuda":
-        return WhisperModel(name, device="cuda", compute_type="float16",
-                            download_root=str(root)), name
+        return WhisperModel(name, device="cuda", compute_type="float16", download_root=str(root))
     return WhisperModel(name, device="cpu", compute_type="int8",
-                        cpu_threads=max(2, (os.cpu_count() or 4) - 1),
-                        download_root=str(root)), name
+                        cpu_threads=max(2, (os.cpu_count() or 4) - 1), download_root=str(root))
 
 
 def transcribe(path: Path, *, on_progress: Optional[Callable[[float], None]] = None,
