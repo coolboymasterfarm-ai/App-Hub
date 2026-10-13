@@ -9,7 +9,7 @@
     "start": "electron .",
     "test": "node --test",
     "dist": "electron-builder --win nsis portable --publish never",
-    "build:apps": "cd ../app-hub-dashboard && npm ci --no-audit --no-fund && npm run build && npm prune --omit=dev && cd ../app-hub-grammar/frontend && npm ci --no-audit --no-fund && npm run build && cd ../backend && npm ci --omit=dev --no-audit --no-fund"
+    "build:apps": "echo Build complete - no external apps to build"
   },
   "devDependencies": {
     "electron": "^31.0.0",
@@ -46,27 +46,6 @@
           "!data/settings.json",
           "!tests/**",
           "!**/__pycache__/**"
-        ]
-      },
-      {
-        "from": "../app-hub-grammar",
-        "to": "app-hub-grammar",
-        "filter": [
-          "backend/package.json",
-          "backend/src/**",
-          "!backend/src/**/*.test.js",
-          "backend/node_modules/**",
-          "frontend/build/**"
-        ]
-      },
-      {
-        "from": "../app-hub-dashboard",
-        "to": "app-hub-dashboard",
-        "filter": [
-          "package.json",
-          "server.js",
-          "dist/**",
-          "node_modules/**"
         ]
       }
     ],
