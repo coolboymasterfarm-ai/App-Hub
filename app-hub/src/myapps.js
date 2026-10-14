@@ -1,1 +1,1 @@
-// test
+const test = 'hello world';
