@@ -180,6 +180,23 @@
               <button class="btn ghost sm danger" id="clean-go">Delete…</button></div>
             <p class="muted small" id="set-where"></p>
           </div>
+          <div class="card set">
+            <h3>Writing Assistant</h3>
+            <p class="muted small">AI grammar, spelling and style checks. Point it at your own FreeLLM API, or leave the endpoint blank and it won't send anything.</p>
+            <div class="srow"><span class="sico"><svg class="i"><use href="#i-edit"/></svg></span>
+              <span class="stext"><b>Status</b><span id="set-writing">…</span></span>
+              <button class="btn ghost" id="set-writing-restart"><svg class="i"><use href="#i-redo"/></svg>Restart</button></div>
+            <label class="srow"><span class="sico"><svg class="i"><use href="#i-globe"/></svg></span>
+              <span class="stext"><b>API endpoint</b><span>Where the writing assistant sends text for analysis.</span></span>
+              <input id="set-writing-endpoint" placeholder="https://your-api.example.com/check" autocomplete="off" spellcheck="false"></label>
+            <label class="srow"><span class="sico"><svg class="i"><use href="#i-key"/></svg></span>
+              <span class="stext"><b>API key</b><span>Sent as <span class="mono">Authorization: Bearer …</span>. Leave blank for no key.</span></span>
+              <input id="set-writing-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false"></label>
+            <div class="row end">
+              <button class="btn ghost sm" id="set-writing-test">Test</button>
+              <button class="btn pri sm" id="set-writing-save">Save</button>
+            </div>
+          </div>
           <div class="card set" id="agents">
             <h3>Starnet &amp; agents</h3>
             <p class="muted small">Lets AI agents on this PC (your Starnet crew, Claude Code) use App Hub's apps as tools. Each app is its own

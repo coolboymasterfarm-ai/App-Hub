@@ -512,6 +512,14 @@ async function startMineNow(id) {
   return { ok: false, error: error || `${a.name} didn't answer within 2 minutes. Open it from the Start menu once to see why.` };
 }
 
+// Stop and restart one My App (Settings > Writing Assistant > Restart).
+function mineRestart(id) {
+  const mineId = String(id).startsWith('my-') ? id : 'my-' + id;
+  closeView(mineId);
+  mineUrls.delete(mineId);
+  return startMine(mineId);
+}
+
 // ---------------------------------------------------------------- pages and app tabs
 
 let page = 'home';      // the page the hub shows: home | clipforge | models | settings | an app id
@@ -737,6 +745,26 @@ ipcMain.handle('clean:plan', (_e, days) => {
   return { videos: p.videos.length, copies: p.copies.length, bytes: p.bytes, size: cleanup.sizeText(p.bytes) };
 });
 ipcMain.handle('clean:run', (_e, days) => { const r = cleanup.run(cleanOpts(days)); return { ...r, size: cleanup.sizeText(r.freed) }; });
+// Writing Assistant: read/write its endpoint + API key, and restart its bundled server.
+function writingConfigFile() { return USER('writing-assistant-config.json'); }
+function writingConfig() { try { return JSON.parse(fs.readFileSync(writingConfigFile(), 'utf8')); } catch { return {}; } }
+function writingStatus() {
+  const s = mineState().find((m) => m.id === 'my-writing') || {};
+  const cfg = writingConfig();
+  return { state: s.state || 'stopped', running: !!s.running, port: s.port || null,
+    endpoint: cfg.endpoint || null, hasKey: !!cfg.apiKey };
+}
+ipcMain.handle('writing:config', () => writingStatus());
+ipcMain.handle('writing:set', (_e, patch) => {
+  try {
+    const cfg = { ...writingConfig() };
+    if (patch.endpoint !== undefined) cfg.endpoint = String(patch.endpoint || '').trim();
+    if (patch.apiKey !== undefined) cfg.apiKey = String(patch.apiKey || '').trim();
+    fs.writeFileSync(writingConfigFile(), JSON.stringify(cfg, null, 2));
+    return writingStatus();
+  } catch (e) { return { error: e.message }; }
+});
+ipcMain.handle('writing:restart', () => { mineRestart('writing'); return writingStatus(); });
 ipcMain.handle('hub:open', (_e, key) => (FOLDERS[key] ? shell.openPath(FOLDERS[key]()) : 'unknown folder'));
 ipcMain.handle('hub:hardware', hwSummary);
 ipcMain.handle('cf:state', () => cfLast);
