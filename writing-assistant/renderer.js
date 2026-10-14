@@ -22,7 +22,6 @@ class WritingAssistant {
         this.filterButtons = document.querySelectorAll('.suggestions-panel .filters .filter-btn');
         this.suggestionsContainer = document.querySelector('.suggestions-panel .suggestions');
         this.scoreCircle = document.querySelector('.suggestions-panel .score-circle');
-        this.progressBar = document.querySelector('.suggestions-panel .progress-bar::before');
         this.progressLabel = document.querySelector('.suggestions-panel .progress-label');
         this.aiDetectorText = document.querySelector('.suggestions-panel .ai-detector p');
         
@@ -33,14 +32,15 @@ class WritingAssistant {
         this.apikeyInput = document.getElementById('apikey-input');
         this.saveSettingsBtn = document.getElementById('save-settings');
         this.clearSettingsBtn = document.getElementById('clear-settings');
+        this.closeSettingsBtn = document.querySelector('.close-settings');
 
         // State
         this.originalText = '';
         this.suggestions = null;
         this.appliedSuggestions = new Set();
         this.isChecking = false;
-        this.currentTab = 'proofread'; // or 'improve'
-        this.currentFilter = 'all'; // or 'grammar', 'clarity', 'delivery'
+        this.currentTab = 'proofread';
+        this.currentFilter = 'all';
 
         // Initialize
         this.init();
@@ -48,10 +48,13 @@ class WritingAssistant {
     }
 
     init() {
-        // Event listeners
+        // Event listeners for textarea
         this.textarea.addEventListener('input', () => {
             if (this.isChecking) return;
             // Reset checking state when user types
+            if (this.suggestions) {
+                this.hideResults();
+            }
         });
 
         // Sidebar navigation
@@ -73,9 +76,7 @@ class WritingAssistant {
         });
         
         this.askAiButton.addEventListener('click', () => {
-            // Ask AI functionality would go here
-            this.askAiButton.classList.add('active');
-            setTimeout(() => this.askAiButton.classList.remove('active'), 300);
+            this.checkWriting();
         });
 
         // Suggestions panel tabs
@@ -84,7 +85,7 @@ class WritingAssistant {
                 this.tabButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.currentTab = btn.textContent.toLowerCase().includes('proofread') ? 'proofread' : 'improve';
-                this.renderSuggestions(); // Re-render with current filter
+                this.renderSuggestions();
             });
         });
 
@@ -94,14 +95,16 @@ class WritingAssistant {
                 this.filterButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.currentFilter = btn.textContent.toLowerCase();
-                if (this.currentFilter === 'all') this.currentFilter = 'all';
-                this.renderSuggestions(); // Re-render with current tab
+                this.renderSuggestions();
             });
         });
 
         // Settings event listeners
         if (this.settingsToggle) {
             this.settingsToggle.addEventListener('click', () => this.toggleSettingsPanel());
+        }
+        if (this.closeSettingsBtn) {
+            this.closeSettingsBtn.addEventListener('click', () => this.toggleSettingsPanel());
         }
         if (this.saveSettingsBtn) {
             this.saveSettingsBtn.addEventListener('click', () => this.saveSettings());
@@ -117,14 +120,17 @@ class WritingAssistant {
                 this.checkWriting();
             }
             if (e.key === 'Escape') {
-                this.textarea.value = '';
-                this.hideResults();
+                if (this.settingsPanel && !this.settingsPanel.classList.contains('hidden')) {
+                    this.toggleSettingsPanel();
+                } else {
+                    this.textarea.value = '';
+                    this.hideResults();
+                }
             }
         });
     }
 
     showLoading() {
-        // Show loading state in suggestions panel
         this.suggestionsContainer.innerHTML = `
             <div class="loading-state">
                 <div class="spinner"></div>
@@ -151,14 +157,14 @@ class WritingAssistant {
         this.suggestions = suggestionsData;
         this.appliedSuggestions.clear();
         
-        // Update score (mock data for now)
-        this.updateScore(85); // Would come from API
+        // Update score (mock data for now - would come from API)
+        this.updateScore(85);
         
         // Update progress (mock data)
-        this.updateProgress(70); // Would come from API
+        this.updateProgress(70);
         
         // Update AI detector (mock data)
-        this.updateAIDetector('This text is 98% human-written.'); // Would come from API
+        this.updateAIDetector('This text is 98% human-written.');
         
         this.renderSuggestions();
     }
@@ -192,22 +198,25 @@ class WritingAssistant {
         if (this.apikeyInput && savedApiKey) {
             this.apikeyInput.value = savedApiKey;
         }
+        
+        // Update freellmService with saved settings
+        if (window.freellmService) {
+            if (savedEndpoint) {
+                window.freellmService.setEndpoint(savedEndpoint);
+            }
+            if (savedApiKey) {
+                window.freellmService.setApiKey(savedApiKey);
+            }
+        }
     }
     
     saveSettings() {
         const endpoint = this.endpointInput ? this.endpointInput.value.trim() : '';
         const apiKey = this.apikeyInput ? this.apikeyInput.value.trim() : '';
         
-        if (endpoint) {
-            localStorage.setItem('freellmEndpoint', endpoint);
-        } else {
-            localStorage.removeItem('freellmEndpoint');
-        }
-        
-        if (apiKey) {
-            localStorage.setItem('freellmApiKey', apiKey);
-        } else {
-            localStorage.removeItem('freellmApiKey');
+        if (window.freellmService) {
+            window.freellmService.setEndpoint(endpoint);
+            window.freellmService.setApiKey(apiKey);
         }
         
         this.showToast('Settings saved!');
@@ -217,8 +226,10 @@ class WritingAssistant {
         if (this.endpointInput) this.endpointInput.value = '';
         if (this.apikeyInput) this.apikeyInput.value = '';
         
-        localStorage.removeItem('freellmEndpoint');
-        localStorage.removeItem('freellmApiKey');
+        if (window.freellmService) {
+            window.freellmService.setEndpoint('');
+            window.freellmService.setApiKey('');
+        }
         
         this.showToast('Settings cleared!');
     }
@@ -226,7 +237,6 @@ class WritingAssistant {
     updateScore(score) {
         if (this.scoreCircle) {
             this.scoreCircle.textContent = score;
-            // Update the conic gradient for the score circle
             this.scoreCircle.style.background = `conic-gradient(
                 var(--primary-teal) ${score}%,
                 #E6E6E6 ${score}%
@@ -235,11 +245,6 @@ class WritingAssistant {
     }
 
     updateProgress(percent) {
-        if (this.progressBar) {
-            // This is a pseudo-element, so we need to update it differently
-            // For simplicity, we'll just update a data attribute that CSS can use
-            document.documentElement.style.setProperty('--progress-width', `${percent}%`);
-        }
         if (this.progressLabel) {
             this.progressLabel.textContent = `${percent}% Proofread`;
         }
@@ -265,7 +270,6 @@ class WritingAssistant {
         let filteredSuggestions = [];
         
         if (this.currentTab === 'proofread') {
-            // Get all suggestions and filter by category
             Object.keys(this.suggestions).forEach(category => {
                 if (this.suggestions[category]) {
                     this.suggestions[category].forEach(suggestion => {
@@ -277,8 +281,6 @@ class WritingAssistant {
                 }
             });
         } else {
-            // For "Improve full paragraphs" tab, we'd have different data structure
-            // For now, showing placeholder
             filteredSuggestions = [{
                 id: 'improve-1',
                 message: 'Consider varying your sentence structure to improve flow',
@@ -307,17 +309,15 @@ class WritingAssistant {
         // Render suggestions
         this.suggestionsContainer.innerHTML = '';
         
-        filteredSuggestions.forEach((suggestion, index) => {
-            const suggestionElement = this.createSuggestionElement(suggestion, index);
+        filteredSuggestions.forEach((suggestion) => {
+            const suggestionElement = this.createSuggestionElement(suggestion);
             this.suggestionsContainer.appendChild(suggestionElement);
         });
     }
 
-    createSuggestionElement(suggestion, index) {
+    createSuggestionElement(suggestion) {
         const item = document.createElement('div');
         item.className = `suggestion-card ${this.appliedSuggestions.has(suggestion.id) ? 'applied' : ''}`;
-        
-        const isApplied = this.appliedSuggestions.has(suggestion.id);
         
         item.innerHTML = `
             <div class="error-icon">❌</div>
@@ -328,12 +328,9 @@ class WritingAssistant {
             </div>
         `;
         
-        // Add dataset for suggestion ID
         item.dataset.suggestionId = suggestion.id;
         
-        // Add click event to apply/unapply suggestion
         item.addEventListener('click', (e) => {
-            // Prevent toggling if clicking on the fix text link
             if (e.target.classList.contains('fix-text')) return;
             
             if (this.appliedSuggestions.has(suggestion.id)) {
@@ -347,7 +344,6 @@ class WritingAssistant {
     }
 
     getErrorTitle(suggestion) {
-        // Map error types to user-friendly titles
         const titleMap = {
             'subject-verb-agreement': 'Correct subject-verb agreement',
             'comma-after-introductory-phrase': 'Use a comma after an introductory phrase',
@@ -364,7 +360,6 @@ class WritingAssistant {
     applySuggestion(suggestionId) {
         this.appliedSuggestions.add(suggestionId);
         
-        // Update UI
         const suggestionItems = this.suggestionsContainer.querySelectorAll('.suggestion-card');
         suggestionItems.forEach(item => {
             const id = item.dataset.suggestionId;
@@ -377,7 +372,6 @@ class WritingAssistant {
     unapplySuggestion(suggestionId) {
         this.appliedSuggestions.delete(suggestionId);
         
-        // Update UI
         const suggestionItems = this.suggestionsContainer.querySelectorAll('.suggestion-card');
         suggestionItems.forEach(item => {
             const id = item.dataset.suggestionId;
@@ -399,49 +393,12 @@ class WritingAssistant {
         this.showLoading();
         
         try {
-            // In a real implementation, this would call the freellmService
-            // For now, we'll simulate with mock data
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
-            
-            // Mock suggestions data
-            const mockSuggestions = {
-                grammar: [
-                    {
-                        id: 'grammar-1',
-                        type: 'subject-verb-agreement',
-                        message: 'Correct subject-verb agreement',
-                        originalText: 'The dogs barks at the mailman.',
-                        suggestedText: 'The dogs bark at the mailman.'
-                    },
-                    {
-                        id: 'grammar-2',
-                        type: 'punctuation-error',
-                        message: 'Add missing comma',
-                        originalText: 'After the meeting we discussed the project.',
-                        suggestedText: 'After the meeting, we discussed the project.'
-                    }
-                ],
-                clarity: [
-                    {
-                        id: 'clarity-1',
-                        type: 'clarity-issue',
-                        message: 'Consider revising for clarity',
-                        originalText: 'She went to the store and bought some milk.',
-                        suggestedText: 'She purchased milk at the store.'
-                    }
-                ],
-                delivery: [
-                    {
-                        id: 'delivery-1',
-                        type: 'delivery-issue',
-                        message: 'Consider a more confident tone',
-                        originalText: 'I think we should probably consider this option.',
-                        suggestedText: 'We should consider this option.'
-                    }
-                ]
-            };
-            
-            this.showResults(mockSuggestions);
+            if (window.freellmService) {
+                const response = await window.freellmService.checkWriting(text);
+                this.showResults(response.suggestions);
+            } else {
+                throw new Error('FreeLLM service not initialized');
+            }
         } catch (error) {
             console.error('Writing check failed:', error);
             this.showError(error.message || 'Failed to check writing. Please try again.');
@@ -457,24 +414,20 @@ class WritingAssistant {
     }
 
     showToast(message) {
-        // Remove existing toast
         const existingToast = document.querySelector('.toast');
         if (existingToast) {
             existingToast.remove();
         }
         
-        // Create new toast
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.textContent = message;
         
         document.body.appendChild(toast);
         
-        // Trigger reflow to enable animation
         toast.offsetHeight;
         toast.classList.add('show');
         
-        // Remove after delay
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => {
