@@ -30,6 +30,11 @@
     ],
     "extraResources": [
       {
+        "from": "../writing-assistant",
+        "to": "writing-assistant",
+        "filter": ["**/*", "!.git", "!.git/**", "!node_modules", "!node_modules/**"]
+      },
+      {
         "from": "../ClipForge",
         "to": "ClipForge",
         "filter": [
