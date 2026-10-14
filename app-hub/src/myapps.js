@@ -4,6 +4,7 @@
 // new install folder) still opens.
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const exists = (p) => !!p && fs.existsSync(p);
 const first = (list) => list.find(exists) || null;
@@ -97,6 +98,15 @@ function myApps(env = process.env, b = BUNDLED) {
       missing: omniBin && !node ? "OmniRoute needs Node.js 22 or newer. Install it from nodejs.org, then click Try again." : null,
       url: () => `http://127.0.0.1:${envValue(omniEnv, 'DASHBOARD_PORT') || envValue(omniEnv, 'PORT') || 20128}/`,
     },
+    writingassistant: {
+      // Static web app: no server to start, just open its index.html from the repo folder.
+      name: 'Writing Assistant', icon: 'spark', note: 'Grammar, spelling, style, and tone suggestions via FreeLLM API.',
+      exe: null, tab: true, hidden: false,
+      url: () => {
+        const dir = path.join(b.dir || path.join(__dirname, '..'), 'writing-assistant');
+        return exists(path.join(dir, 'index.html')) ? pathToFileURL(path.join(dir, 'index.html')).href : null;
+      },
+    }
 
   };
 }
