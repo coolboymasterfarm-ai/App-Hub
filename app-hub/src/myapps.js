@@ -97,10 +97,6 @@ function myApps(env = process.env, b = BUNDLED) {
       missing: omniBin && !node ? "OmniRoute needs Node.js 22 or newer. Install it from nodejs.org, then click Try again." : null,
       url: () => `http://127.0.0.1:${envValue(omniEnv, 'DASHBOARD_PORT') || envValue(omniEnv, 'PORT') || 20128}/`,
     },
-    grammar: bundledApp(b, path.join('app-hub-grammar', 'backend', 'src', 'server.js'), 5090,
-      { name: 'Grammar', icon: 'edit', note: 'Your own Grammarly: grammar, spelling, tone and clarity.' }),
-    dashboard: bundledApp(b, path.join('app-hub-dashboard', 'server.js'), 5091,
-      { name: 'Agent Dashboard', icon: 'cpu', note: 'Your agents, their tasks and how they are doing.' }),
     writing: bundledApp(b, path.join('writing-assistant', 'server.js'), 5092,
       { name: 'Writing Assistant', icon: 'edit', note: 'AI-powered grammar, spelling and style checks. Set its endpoint and API key in Settings.' }),
   };
