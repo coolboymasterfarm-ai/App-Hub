@@ -36,6 +36,20 @@ class FreeLLMService {
     }
 
     /**
+     * Get the API key from available sources
+     * @returns {string|null} The API key or null
+     */
+    getApiKey() {
+        if (typeof window !== 'undefined' && window.FREELLM_API_KEY) {
+            return window.FREELLM_API_KEY;
+        }
+        if (typeof localStorage !== 'undefined') {
+            return localStorage.getItem('freellmApiKey');
+        }
+        return null;
+    }
+
+    /**
      * Set the FreeLLM API endpoint
      * @param {string} endpoint - The API endpoint URL
      */
@@ -43,6 +57,18 @@ class FreeLLMService {
         this.endpoint = endpoint;
         if (typeof localStorage !== 'undefined') {
             localStorage.setItem('freellmEndpoint', endpoint);
+        }
+    }
+
+    /**
+     * Set the API key
+     * @param {string} apiKey - The API key
+     */
+    setApiKey(apiKey) {
+        this.apiKey = apiKey || null;
+        if (typeof localStorage !== 'undefined') {
+            if (apiKey) localStorage.setItem('freellmApiKey', apiKey);
+            else localStorage.removeItem('freellmApiKey');
         }
     }
 
@@ -58,13 +84,19 @@ class FreeLLMService {
         }
 
         try {
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+            
+            // Add authorization header if API key is set
+            const apiKey = this.getApiKey();
+            if (apiKey) {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            }
+
             const response = await fetch(this.endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // Add any required headers here, e.g.:
-                    // 'Authorization': `Bearer ${API_TOKEN}` 
-                },
+                headers,
                 body: JSON.stringify({
                     text: text,
                     // Add any other parameters your API expects
