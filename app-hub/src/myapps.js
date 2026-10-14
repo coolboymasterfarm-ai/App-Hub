@@ -23,8 +23,8 @@ function tail(f, bytes = 1 << 20) {
 
 // StarNet's desktop app starts its server on a new port every time and writes it to startup.log.
 function starnetPort(log) {
-  const ports = String(log).split(/\\r?\\n/).filter((l) => /spawn_sidecar\\b/.test(l) && !/listening=false/.test(l))
-    .map((l) => (/\\bport=(\\d+)/.exec(l) || [])[1]).filter(Boolean);
+  const ports = String(log).split(/\r?\n/).filter((l) => /spawn_sidecar\b/.test(l) && !/listening=false/.test(l))
+    .map((l) => (/\bport=(\d+)/.exec(l) || [])[1]).filter(Boolean);
   return ports.length ? Number(ports[ports.length - 1]) : null;
 }
 
