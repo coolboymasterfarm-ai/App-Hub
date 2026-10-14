@@ -63,6 +63,20 @@ class FreeLLMService {
     }
 
     /**
+     * Get the API key from available sources
+     * @returns {string|null} The API key or null
+     */
+    getApiKey() {
+        if (typeof window !== 'undefined' && window.FREELLM_API_KEY) {
+            return window.FREELLM_API_KEY;
+        }
+        if (typeof localStorage !== 'undefined') {
+            return localStorage.getItem('freellmApiKey');
+        }
+        return null;
+    }
+
+    /**
      * Set the FreeLLM API endpoint
      * @param {string} endpoint - The API endpoint URL
      */
@@ -70,6 +84,18 @@ class FreeLLMService {
         this.endpoint = endpoint;
         if (typeof localStorage !== 'undefined') {
             localStorage.setItem('freellmEndpoint', endpoint);
+        }
+    }
+
+    /**
+     * Set the API key
+     * @param {string} apiKey - The API key
+     */
+    setApiKey(apiKey) {
+        this.apiKey = apiKey || null;
+        if (typeof localStorage !== 'undefined') {
+            if (apiKey) localStorage.setItem('freellmApiKey', apiKey);
+            else localStorage.removeItem('freellmApiKey');
         }
     }
 

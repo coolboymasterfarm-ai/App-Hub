@@ -29,6 +29,14 @@ class WritingAssistant {
         this.saveSettingsBtn = document.getElementById('save-settings');
         this.clearSettingsBtn = document.getElementById('clear-settings');
 
+        // Settings elements
+        this.settingsToggle = document.getElementById('settings-toggle');
+        this.settingsPanel = document.getElementById('settings-panel');
+        this.endpointInput = document.getElementById('endpoint-input');
+        this.apiKeyInput = document.getElementById('apikey-input');
+        this.saveSettingsBtn = document.getElementById('save-settings');
+        this.clearSettingsBtn = document.getElementById('clear-settings');
+
         // State
         this.originalText = '';
         this.suggestions = null;
@@ -41,6 +49,9 @@ class WritingAssistant {
     }
 
     init() {
+        // Load saved settings
+        this.loadSettings();
+
         // Event listeners
         this.textarea.addEventListener('input', () => {
             this.updateCounts();
@@ -49,6 +60,14 @@ class WritingAssistant {
         });
 
         this.checkBtn.addEventListener('click', () => this.checkWriting());
+
+        // Settings toggle
+        this.settingsToggle.addEventListener('click', () => this.toggleSettingsPanel());
+
+        this.saveSettingsBtn.addEventListener('click', () => this.saveSettings());
+
+        this.clearSettingsBtn.addEventListener('click', () => this.clearSettings());
+
         this.applyAllBtn.addEventListener('click', () => this.applyAllSuggestions());
         this.copyBtn.addEventListener('click', () => this.copyCorrectedText());
         this.downloadBtn.addEventListener('click', () => this.downloadCorrectedText());
@@ -70,12 +89,69 @@ class WritingAssistant {
                 e.preventDefault();
                 this.checkWriting();
             }
+            if (e.key === 'Escape' && this.settingsPanel && !this.settingsPanel.classList.contains('hidden')) {
+                this.toggleSettingsPanel();
+            }
             if (e.key === 'Escape') {
                 this.textarea.value = '';
                 this.updateCounts();
                 this.hideResults();
             }
         });
+    }
+
+    loadSettings() {
+        // Load endpoint
+        const savedEndpoint = localStorage.getItem('freellmEndpoint');
+        if (savedEndpoint) {
+            this.endpointInput.value = savedEndpoint;
+            freellmService.setEndpoint(savedEndpoint);
+        }
+
+        // Load API key
+        const savedApiKey = localStorage.getItem('freellmApiKey');
+        if (savedApiKey) {
+            this.apiKeyInput.value = savedApiKey;
+            freellmService.setApiKey(savedApiKey);
+        }
+    }
+
+    saveSettings() {
+        const endpoint = this.endpointInput.value.trim();
+        const apiKey = this.apiKeyInput.value.trim();
+
+        if (endpoint) {
+            freellmService.setEndpoint(endpoint);
+            showToast('Settings saved!');
+        } else {
+            showToast('Please enter an endpoint URL', 3000);
+            return;
+        }
+
+        if (apiKey) {
+            freellmService.setApiKey(apiKey);
+        } else {
+            freellmService.setApiKey(null);
+        }
+    }
+
+    clearSettings() {
+        if (confirm('Clear all saved settings?')) {
+            localStorage.removeItem('freellmEndpoint');
+            localStorage.removeItem('freellmApiKey');
+            this.endpointInput.value = '';
+            this.apiKeyInput.value = '';
+            freellmService.endpoint = freellmService.getEndpoint();
+            freellmService.setApiKey(null);
+            showToast('Settings cleared');
+        }
+    }
+
+    toggleSettingsPanel() {
+        this.settingsPanel.classList.toggle('hidden');
+        if (!this.settingsPanel.classList.contains('hidden')) {
+            this.endpointInput.focus();
+        }
     }
 
     updateCounts() {
