@@ -7,13 +7,19 @@ const path = require('path');
 const PORT = process.env.PORT || 5092;
 const DIR = __dirname;
 // Config lives next to App Hub's user data (where main.js writes hub-settings.json).
-const CONFIG_FILE = path.join(path.dirname(process.execPath), 'writing-assistant-config.json');
+const CONFIG_FILE = path.join(process.env.HUB_USERDATA || process.env.APPDATA || DIR, 'writing-assistant-config.json');
 
 function readConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
 }
+function writeConfig(cfg) {
+  const dir = path.dirname(CONFIG_FILE);
+  try { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); } catch {}
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+}
 
 function serveFile(res, filePath, contentType) {
+  if (!res) return;
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
     res.writeHead(200, { 'Content-Type': contentType });
@@ -21,8 +27,8 @@ function serveFile(res, filePath, contentType) {
   });
 }
 
-const server = http.createServer((req, reqUrl) => {
-  const url = new URL(reqUrl, `http://127.0.0.1:${PORT}`);
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
   // Config API: GET returns current endpoint/key, POST saves them.
   if (url.pathname === '/api/config') {
@@ -37,7 +43,7 @@ const server = http.createServer((req, reqUrl) => {
       return req.on('end', () => {
         try {
           const cfg = { ...readConfig(), ...JSON.parse(body) };
-          fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+          writeConfig(cfg);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ ok: true }));
         } catch (e) {
