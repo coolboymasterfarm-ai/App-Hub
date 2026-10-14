@@ -51,6 +51,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       # Clean up old artifacts before uploading to avoid hitting storage quotas
       - name: Delete old artifacts
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
