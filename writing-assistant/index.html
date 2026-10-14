@@ -60,6 +60,7 @@
         <div class="suggestions-panel">
             <div class="panel-header">
                 <img src="grammarly-logo.png" alt="Grammarly Logo">
+                <button class="settings-toggle" title="Settings">⚙️</button>
                 <div class="score">
                     <div class="score-circle">85</div>
                     <div class="score-label">Writing quality</div>
@@ -100,6 +101,29 @@
             <div class="ai-detector">
                 <h4>AI Detector</h4>
                 <p>This text is 98% human-written.</p>
+            </div>
+        </div>
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="settings-panel hidden">
+            <div class="settings-panel-header">
+                <h3>Settings</h3>
+                <button class="close-settings">×</button>
+            </div>
+            <div class="settings-content">
+                <div class="form-group">
+                    <label for="endpoint-input">API Endpoint URL</label>
+                    <input type="text" id="endpoint-input" placeholder="https://your-api.com/freellm/check">
+                    <p class="hint">The FreeLLM API endpoint for checking writing</p>
+                </div>
+                <div class="form-group">
+                    <label for="apikey-input">API Key</label>
+                    <input type="password" id="apikey-input" placeholder="Enter your API key">
+                    <p class="hint">Optional - sent as Bearer token if provided</p>
+                </div>
+                <div class="settings-actions">
+                    <button id="save-settings" class="primary-btn">Save Settings</button>
+                    <button id="clear-settings" class="ghost-btn">Clear</button>
+                </div>
             </div>
         </div>
     </div>
