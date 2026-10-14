@@ -678,6 +678,7 @@ async function loadSettings() {
   $('about').textContent = `App Hub ${info.version}`;
   paintSetCf();
   paintClean();
+  paintWriting();
 }
 function paintSetCf() {
   const n = cf.projects.length;
@@ -708,6 +709,42 @@ $('clean-go').onclick = async () => {
 document.querySelectorAll('[data-open]').forEach((b) => {
   b.onclick = async () => { const err = await hub.open(b.dataset.open); if (err) toast(err.includes('exist') ? 'Nothing there yet' : err, 3500); };
 });
+
+// Writing Assistant (Settings): its endpoint + API key, and restart.
+async function paintWriting() {
+  const r = await hub.writingConfig();
+  if (r.error) return;
+  $('set-writing').textContent = { running: 'Running', starting: 'Starting…', stopped: 'Stopped', 'not-installed': 'Not installed yet' }[r.state] || r.state;
+  $('set-writing-restart').disabled = r.state === 'not-installed';
+  $('set-writing-endpoint').value = r.endpoint || '';
+  $('set-writing-key').value = '';
+}
+$('set-writing-restart').onclick = async () => {
+  $('set-writing-restart').disabled = true;
+  await hub.writingRestart();
+  setTimeout(() => { paintWriting(); $('set-writing-restart').disabled = false; }, 1500);
+  toast('Restarting Writing Assistant…');
+};
+$('set-writing-save').onclick = async () => {
+  $('set-writing-save').disabled = true;
+  const r = await hub.writingSet({ endpoint: $('set-writing-endpoint').value, apiKey: $('set-writing-key').value });
+  $('set-writing-save').disabled = false;
+  if (r.error) return toast(r.error, 5000);
+  $('set-writing-key').value = '';
+  paintWriting();
+  toast(r.hasKey ? 'Saved endpoint and API key' : 'Saved endpoint (no API key)');
+};
+$('set-writing-test').onclick = async () => {
+  $('set-writing-test').disabled = true;
+  const ep = $('set-writing-endpoint').value.trim();
+  if (!ep) { toast('Set an endpoint first', 3000); $('set-writing-test').disabled = false; return; }
+  try {
+    const r = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'Hello, this is a test.' }) });
+    toast(r.ok ? 'Endpoint answered' : `Endpoint said ${r.status}`, r.ok ? 2600 : 6000);
+  } catch (e) { toast('Endpoint did not answer: ' + e.message, 6000); }
+  $('set-writing-test').disabled = false;
+};
 
 // ---------------------------------------------------------------- start
 

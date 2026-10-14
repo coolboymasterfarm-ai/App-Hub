@@ -101,8 +101,12 @@ function myApps(env = process.env, b = BUNDLED) {
       { name: 'Grammar', icon: 'edit', note: 'Your own Grammarly: grammar, spelling, tone and clarity.' }),
     dashboard: bundledApp(b, path.join('app-hub-dashboard', 'server.js'), 5091,
       { name: 'Agent Dashboard', icon: 'cpu', note: 'Your agents, their tasks and how they are doing.' }),
+    writing: bundledApp(b, path.join('writing-assistant', 'server.js'), 5092,
+      { name: 'Writing Assistant', icon: 'edit', note: 'AI-powered grammar, spelling and style checks. Set its endpoint and API key in Settings.' }),
   };
 }
+
+// What an agent sees about My Apps: running or not, port and addresses. state: mineState()'s list ({ id: 'my-<app>', ... }).
 
 // What an agent sees about My Apps: running or not, port and addresses. state: mineState()'s list ({ id: 'my-<app>', ... }).
 function statusFor(all, state) {

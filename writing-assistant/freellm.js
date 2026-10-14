@@ -10,6 +10,33 @@ class FreeLLMService {
         // 2. Local storage: localStorage.getItem('freellmEndpoint')
         // 3. Default fallback (for development only)
         this.endpoint = this.getEndpoint();
+        this.apiKey = this.getApiKey();
+    }
+
+    /**
+     * Get the API key from available sources (App Hub global, then localStorage).
+     * @returns {string|null} The API key, or null if not set.
+     */
+    getApiKey() {
+        if (typeof window !== 'undefined' && window.FREELLM_API_KEY) {
+            return window.FREELLM_API_KEY;
+        }
+        if (typeof localStorage !== 'undefined') {
+            return localStorage.getItem('freellmApiKey');
+        }
+        return null;
+    }
+
+    /**
+     * Set the API key (saved to localStorage).
+     * @param {string} apiKey - The API key, or null/empty to clear it.
+     */
+    setApiKey(apiKey) {
+        this.apiKey = apiKey || null;
+        if (typeof localStorage !== 'undefined') {
+            if (apiKey) localStorage.setItem('freellmApiKey', apiKey);
+            else localStorage.removeItem('freellmApiKey');
+        }
     }
 
     /**
@@ -58,13 +85,12 @@ class FreeLLMService {
         }
 
         try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
+
             const response = await fetch(this.endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // Add any required headers here, e.g.:
-                    // 'Authorization': `Bearer ${API_TOKEN}` 
-                },
+                headers,
                 body: JSON.stringify({
                     text: text,
                     // Add any other parameters your API expects
@@ -73,7 +99,7 @@ class FreeLLMService {
             });
 
             if (!response.ok) {
-                throw new Error(`API request failed with status ${response.status}`);
+                throw new Error('API request failed with status ' + response.status);
             }
 
             const data = await response.json();
@@ -102,16 +128,16 @@ class FreeLLMService {
         return {
             // Overall score or assessment (if provided by API)
             score: rawResponse.score || null,
-            
+
             // Detailed feedback by category
             suggestions: this.categorizeSuggestions(rawResponse.suggestions || rawResponse.feedback || []),
-            
+
             // Corrected version of the text (if provided by API)
             correctedText: rawResponse.correctedText || null,
-            
+
             // Original text for reference
             originalText: rawResponse.originalText || null,
-            
+
             // Any metadata from the API
             metadata: rawResponse.metadata || {}
         };
@@ -144,72 +170,72 @@ class FreeLLMService {
             let categorized = false;
 
             // Grammar-related
-            if (type.includes('grammar') || 
-                message.includes('grammar') || 
-                message.includes('subject') || 
-                message.includes('verb') || 
-                message.includes('tense') || 
+            if (type.includes('grammar') ||
+                message.includes('grammar') ||
+                message.includes('subject') ||
+                message.includes('verb') ||
+                message.includes('tense') ||
                 message.includes('agreement')) {
                 categories.grammar.push(suggestion);
                 categorized = true;
             }
 
             // Spelling-related
-            if (type.includes('spelling') || 
-                message.includes('spelling') || 
-                message.includes('misspelled') || 
+            if (type.includes('spelling') ||
+                message.includes('spelling') ||
+                message.includes('misspelled') ||
                 message.includes('typo')) {
                 categories.spelling.push(suggestion);
                 categorized = true;
             }
 
             // Punctuation-related
-            if (type.includes('punctuation') || 
-                message.includes('punctuation') || 
-                message.includes('comma') || 
-                message.includes('period') || 
-                message.includes('semicolon') || 
+            if (type.includes('punctuation') ||
+                message.includes('punctuation') ||
+                message.includes('comma') ||
+                message.includes('period') ||
+                message.includes('semicolon') ||
                 message.includes('colon')) {
                 categories.punctuation.push(suggestion);
                 categorized = true;
             }
 
             // Style-related
-            if (type.includes('style') || 
-                message.includes('style') || 
-                message.includes('passive') || 
-                message.includes('wordy') || 
-                message.includes('cliché') || 
+            if (type.includes('style') ||
+                message.includes('style') ||
+                message.includes('passive') ||
+                message.includes('wordy') ||
+                message.includes('cliché') ||
                 message.includes('redundant')) {
                 categories.style.push(suggestion);
                 categorized = true;
             }
 
             // Tone-related
-            if (type.includes('tone') || 
-                message.includes('tone') || 
-                message.includes('formal') || 
-                message.includes('informal') || 
-                message.includes('professional') || 
+            if (type.includes('tone') ||
+                message.includes('tone') ||
+                message.includes('formal') ||
+                message.includes('informal') ||
+                message.includes('professional') ||
                 message.includes('casual')) {
                 categories.tone.push(suggestion);
                 categorized = true;
             }
 
             // Vocabulary-related
-            if (type.includes('vocabulary') || 
-                message.includes('vocabulary') || 
-                message.includes('word choice') || 
+            if (type.includes('vocabulary') ||
+                message.includes('vocabulary') ||
+                message.includes('word choice') ||
                 message.includes('synonym')) {
                 categories.vocabulary.push(suggestion);
                 categorized = true;
             }
 
             // Clarity-related
-            if (type.includes('clarity') || 
-                message.includes('clarity') || 
-                message.includes('unclear') || 
-                message.contains('confusing')) {
+            if (type.includes('clarity') ||
+                message.includes('clarity') ||
+                message.includes('unclear') ||
+                message.includes('confusing')) {
                 categories.clarity.push(suggestion);
                 categorized = true;
             }

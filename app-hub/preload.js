@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld('hub', {
   // My Apps: StarNet, FreeLLMAPI, OmniRoute
   mineState: () => ipcRenderer.invoke('mine:state'),
   startMine: (id) => ipcRenderer.invoke('mine:start', id),
+  // Writing Assistant: its endpoint + API key, set in Settings
+  writingConfig: () => ipcRenderer.invoke('writing:config'),
+  writingSet: (patch) => ipcRenderer.invoke('writing:set', patch),
+  writingRestart: () => ipcRenderer.invoke('writing:restart'),
   nav: (id, action) => ipcRenderer.send('tab:nav', id, action),
   closeTab: (id) => ipcRenderer.send('tab:close', id),
   onTabState: on('tab:state'),
