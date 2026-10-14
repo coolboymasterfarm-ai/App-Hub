@@ -97,6 +97,15 @@ function myApps(env = process.env, b = BUNDLED) {
       missing: omniBin && !node ? "OmniRoute needs Node.js 22 or newer. Install it from nodejs.org, then click Try again." : null,
       url: () => `http://127.0.0.1:${envValue(omniEnv, 'DASHBOARD_PORT') || envValue(omniEnv, 'PORT') || 20128}/`,
     },
+    writing: {
+      // Writing Assistant: AI-powered grammar, spelling, and style suggestions. Runs its own server
+      // (server.js) with Node, serves the static app on port 5092, and reads endpoint/API key from
+      // writing-assistant-config.json (written by App Hub Settings).
+      name: 'Writing Assistant', icon: 'pen', note: 'AI-powered writing assistant: grammar, spelling, and style suggestions.',
+      exe: node, args: node ? [path.join(dl, 'writing-assistant', 'server.js')] : [], shortcuts: [], hidden: true,
+      missing: "Writing Assistant needs Node.js. Install it from nodejs.org, then click Try again.",
+      url: () => `http://127.0.0.1:5092/`,
+    },
 
   };
 }
