@@ -3,7 +3,7 @@
  * Handles UI interactions, API integration, and user experience
  */
 
-import freellmService from './freellm.js';
+// freellmService is available globally from freellm.js
 
 class WritingAssistant {
     constructor() {
@@ -20,33 +20,49 @@ class WritingAssistant {
         this.copyBtn = document.getElementById('copy-btn');
         this.downloadBtn = document.getElementById('download-btn');
         this.previewText = document.getElementById('preview-text');
+        
+        // Settings elements
+        this.settingsToggle = document.getElementById('settings-toggle');
+        this.settingsPanel = document.getElementById('settings-panel');
+        this.endpointInput = document.getElementById('endpoint-input');
+        this.apikeyInput = document.getElementById('apikey-input');
+        this.saveSettingsBtn = document.getElementById('save-settings');
+        this.clearSettingsBtn = document.getElementById('clear-settings');
 
         // State
         this.originalText = '';
         this.suggestions = null;
-        this.appliedSuggestions = new Set(); // Track which suggestions have been applied
+        this.appliedSuggestions = new Set();
         this.isChecking = false;
 
         // Initialize
         this.init();
+        this.loadSettings();
     }
 
     init() {
         // Event listeners
         this.textarea.addEventListener('input', () => {
             this.updateCounts();
-            // Clear results when user starts typing new text
             if (this.isChecking) return;
             this.hideResults();
         });
 
         this.checkBtn.addEventListener('click', () => this.checkWriting());
-
         this.applyAllBtn.addEventListener('click', () => this.applyAllSuggestions());
-
         this.copyBtn.addEventListener('click', () => this.copyCorrectedText());
-
         this.downloadBtn.addEventListener('click', () => this.downloadCorrectedText());
+        
+        // Settings event listeners
+        if (this.settingsToggle) {
+            this.settingsToggle.addEventListener('click', () => this.toggleSettingsPanel());
+        }
+        if (this.saveSettingsBtn) {
+            this.saveSettingsBtn.addEventListener('click', () => this.saveSettings());
+        }
+        if (this.clearSettingsBtn) {
+            this.clearSettingsBtn.addEventListener('click', () => this.clearSettings());
+        }
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -105,13 +121,8 @@ class WritingAssistant {
         this.suggestions = suggestionsData;
         this.appliedSuggestions.clear();
         
-        // Render suggestions
         this.renderSuggestions(suggestionsData);
-        
-        // Show preview
         this.updatePreview();
-        
-        // Show results section
         this.resultsSection.classList.remove('hidden');
     }
 
@@ -122,6 +133,53 @@ class WritingAssistant {
         this.suggestions = null;
         this.appliedSuggestions.clear();
     }
+    
+    toggleSettingsPanel() {
+        if (this.settingsPanel) {
+            this.settingsPanel.classList.toggle('hidden');
+        }
+    }
+    
+    loadSettings() {
+        const savedEndpoint = localStorage.getItem('freellmEndpoint');
+        const savedApiKey = localStorage.getItem('freellmApiKey');
+        
+        if (this.endpointInput && savedEndpoint) {
+            this.endpointInput.value = savedEndpoint;
+        }
+        if (this.apikeyInput && savedApiKey) {
+            this.apikeyInput.value = savedApiKey;
+        }
+    }
+    
+    saveSettings() {
+        const endpoint = this.endpointInput ? this.endpointInput.value.trim() : '';
+        const apiKey = this.apikeyInput ? this.apikeyInput.value.trim() : '';
+        
+        if (endpoint) {
+            localStorage.setItem('freellmEndpoint', endpoint);
+        } else {
+            localStorage.removeItem('freellmEndpoint');
+        }
+        
+        if (apiKey) {
+            localStorage.setItem('freellmApiKey', apiKey);
+        } else {
+            localStorage.removeItem('freellmApiKey');
+        }
+        
+        this.showToast('Settings saved!');
+    }
+    
+    clearSettings() {
+        if (this.endpointInput) this.endpointInput.value = '';
+        if (this.apikeyInput) this.apikeyInput.value = '';
+        
+        localStorage.removeItem('freellmEndpoint');
+        localStorage.removeItem('freellmApiKey');
+        
+        this.showToast('Settings cleared!');
+    }
 
     renderSuggestions(suggestionsData) {
         this.suggestionsContent.innerHTML = '';
@@ -131,7 +189,6 @@ class WritingAssistant {
             return;
         }
 
-        // Define category order and labels
         const categories = [
             { id: 'grammar', label: 'Grammar', icon: '📝' },
             { id: 'spelling', label: 'Spelling', icon: '🔤' },
@@ -166,20 +223,16 @@ class WritingAssistant {
         const item = document.createElement('div');
         item.className = `suggestion-item ${this.appliedSuggestions.has(`${category}-${index}`) ? 'applied' : ''}`;
         
-        // Create unique ID for this suggestion
         const suggestionId = `${category}-${index}`;
         
-        // Suggestion text
         const textElement = document.createElement('p');
         textElement.className = 'suggestion-text';
         textElement.textContent = suggestion.message || suggestion.text || 'No description available';
         item.appendChild(textElement);
         
-        // Actions
         const actions = document.createElement('div');
         actions.className = 'suggestion-actions';
         
-        // Checkbox to apply suggestion
         const checkboxLabel = document.createElement('label');
         checkboxLabel.className = 'suggestion-checkbox';
         
@@ -199,7 +252,6 @@ class WritingAssistant {
         checkboxLabel.appendChild(document.createTextNode(' Apply suggestion'));
         actions.appendChild(checkboxLabel);
         
-        // Apply button (alternative to checkbox)
         const applyBtn = document.createElement('button');
         applyBtn.className = 'apply-btn';
         applyBtn.textContent = 'Apply';
@@ -217,10 +269,8 @@ class WritingAssistant {
     applySuggestion(suggestionId, suggestion) {
         this.appliedSuggestions.add(suggestionId);
         
-        // Update UI
         const suggestionItems = this.suggestionsContent.querySelectorAll('.suggestion-item');
         suggestionItems.forEach(item => {
-            // This is a simplified approach - in a real app you'd have better ID tracking
             if (item.querySelector('input[type="checkbox"]').checked) {
                 item.classList.add('applied');
             } else {
@@ -232,10 +282,8 @@ class WritingAssistant {
     unapplySuggestion(suggestionId) {
         this.appliedSuggestions.delete(suggestionId);
         
-        // Update UI
         const suggestionItems = this.suggestionsContent.querySelectorAll('.suggestion-item');
         suggestionItems.forEach(item => {
-            // This is a simplified approach - in a real app you'd have better ID tracking
             if (!item.querySelector('input[type="checkbox"]').checked) {
                 item.classList.remove('applied');
             }
@@ -245,25 +293,19 @@ class WritingAssistant {
     applyAllSuggestions() {
         if (!this.suggestions) return;
         
-        // Check all checkboxes
         const checkboxes = this.suggestionsContent.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach(checkbox => {
             if (!checkbox.checked) {
                 checkbox.checked = true;
-                // Get suggestion data - simplified for demo
-                // In a real implementation, you'd have better data association
             }
         });
         
-        // Mark all suggestions as applied
-        // This is simplified - real implementation would properly track each suggestion
         Object.keys(this.suggestions).forEach(category => {
             this.suggestions[category].forEach((_, index) => {
                 this.appliedSuggestions.add(`${category}-${index}`);
             });
         });
         
-        // Update UI
         const suggestionItems = this.suggestionsContent.querySelectorAll('.suggestion-item');
         suggestionItems.forEach(item => {
             item.classList.add('applied');
@@ -278,14 +320,7 @@ class WritingAssistant {
             return;
         }
         
-        // Start with original text
         let preview = this.originalText || this.textarea.value;
-        
-        // Apply all selected suggestions (simplified)
-        // In a real implementation, you'd apply the actual text transformations
-        // suggested by the API for each selected suggestion
-        
-        // For demo purposes, we'll just show the original text with an indicator
         const appliedCount = this.appliedSuggestions.size;
         if (appliedCount > 0) {
             this.previewText.textContent = `${preview}\n\n[Preview showing text with ${appliedCount} suggestions applied]`;
@@ -297,22 +332,22 @@ class WritingAssistant {
     copyCorrectedText() {
         const textToCopy = this.previewText.textContent;
         if (!textToCopy || textToCopy.trim() === '') {
-            showToast('No text to copy');
+            this.showToast('No text to copy');
             return;
         }
         
         navigator.clipboard.writeText(textToCopy).then(() => {
-            showToast('Text copied to clipboard!');
+            this.showToast('Text copied to clipboard!');
         }).catch(err => {
             console.error('Failed to copy text:', err);
-            showToast('Failed to copy text');
+            this.showToast('Failed to copy text');
         });
     }
 
     downloadCorrectedText() {
         const textToDownload = this.previewText.textContent;
         if (!textToDownload || textToDownload.trim() === '') {
-            showToast('No text to download');
+            this.showToast('No text to download');
             return;
         }
         
@@ -326,7 +361,7 @@ class WritingAssistant {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        showToast('Text downloaded as writing-assistant-corrected.txt');
+        this.showToast('Text downloaded as writing-assistant-corrected.txt');
     }
 
     async checkWriting() {
@@ -352,67 +387,31 @@ class WritingAssistant {
             this.isChecking = false;
         }
     }
+    
+    showToast(message) {
+        const existingToast = document.querySelector('.toast');
+        if (existingToast) {
+            existingToast.remove();
+        }
+        
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        
+        document.body.appendChild(toast);
+        toast.offsetHeight;
+        toast.classList.add('show');
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }, 3000);
+    }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.writingAssistant = new WritingAssistant();
 });
-
-// Simple toast notification system
-function showToast(message) {
-    // Remove any existing toast
-    const existingToast = document.querySelector('.toast');
-    if (existingToast) {
-        existingToast.remove();
-    }
-    
-    // Create toast element
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    
-    // Add to document
-    document.body.appendChild(toast);
-    
-    // Trigger reflow for animation
-    toast.offsetHeight;
-    
-    // Show toast
-    toast.classList.add('show');
-    
-    // Hide after delay
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => {
-            toast.remove();
-        }, 300);
-    }, 3000);
-}
-
-// Add toast styles if not already present
-if (!document.getElementById 'toast-styles') {
-    const style = document.createElement('style');
-    style.id = 'toast-styles';
-    style.textContent = `
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #333;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 4px;
-            font-size: 14px;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        
-        .toast.show {
-            opacity: 1;
-        }
-    `;
-    document.head.appendChild(style);
-}

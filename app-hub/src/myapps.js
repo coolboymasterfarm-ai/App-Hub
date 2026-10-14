@@ -97,8 +97,7 @@ function myApps(env = process.env, b = BUNDLED) {
       missing: omniBin && !node ? "OmniRoute needs Node.js 22 or newer. Install it from nodejs.org, then click Try again." : null,
       url: () => `http://127.0.0.1:${envValue(omniEnv, 'DASHBOARD_PORT') || envValue(omniEnv, 'PORT') || 20128}/`,
     },
-    writing: bundledApp(b, path.join('writing-assistant', 'server.js'), 5092,
-      { name: 'Writing Assistant', icon: 'edit', note: 'AI-powered grammar, spelling and style checks. Set its endpoint and API key in Settings.' }),
+
   };
 }
 
