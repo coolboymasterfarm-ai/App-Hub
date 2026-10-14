@@ -27,7 +27,28 @@
                 </div>
             </div>
             
-            <button id="check-btn" class="primary-btn">Check Writing</button>
+                            <button id="check-btn" class="primary-btn">Check Writing</button>
+            
+            <div class="settings-section">
+                <button id="settings-toggle" class="ghost-btn">⚙️ Settings</button>
+                <div id="settings-panel" class="settings-panel hidden">
+                    <h3>API Configuration</h3>
+                    <div class="form-group">
+                        <label for="endpoint-input">API Endpoint URL</label>
+                        <input type="text" id="endpoint-input" placeholder="https://your-api.com/freellm/check" />
+                        <p class="hint">The FreeLLM API endpoint for checking writing</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="apikey-input">API Key</label>
+                        <input type="password" id="apikey-input" placeholder="Enter your API key" />
+                        <p class="hint">Optional - sent as Bearer token if provided</p>
+                    </div>
+                    <div class="settings-actions">
+                        <button id="save-settings" class="primary-btn">Save Settings</button>
+                        <button id="clear-settings" class="ghost-btn">Clear</button>
+                    </div>
+                </div>
+            </div>
             
             <div class="settings-section">
                 <button id="settings-toggle" class="ghost-btn">⚙️ Settings</button>

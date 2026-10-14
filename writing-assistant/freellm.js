@@ -281,5 +281,4 @@ class FreeLLMService {
 
 // Create and export a singleton instance
 const freellmService = new FreeLLMService();
-export default freellmService;
-export { FreeLLMService };
+window.freellmService = freellmService;
