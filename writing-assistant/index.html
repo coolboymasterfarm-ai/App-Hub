@@ -7,98 +7,126 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Writing Assistant</h1>
-            <p>Improve your writing with AI-powered grammar, spelling, and style checks</p>
-        </header>
-        
-        <main>
-            <div class="input-section">
-                <label for="writing-input">Your Text:</label>
-                <textarea 
-                    id="writing-input" 
-                    placeholder="Paste or type your writing here to get suggestions..."
-                    rows="10"
-                ></textarea>
-                <div class="counter">
-                    Characters: <span id="char-count">0</span> | 
-                    Words: <span id="word-count">0</span>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="nav-item active">
+                <span class="icon">📄</span>
+                <span class="label">My docs</span>
+            </div>
+            <div class="nav-item">
+                <span class="icon">⭐</span>
+                <span class="label">Favorites</span>
+            </div>
+            <div class="nav-item">
+                <span class="icon">⏰</span>
+                <span class="label">Version history</span>
+            </div>
+            <div class="nav-item">
+                <span class="icon">⚙️</span>
+                <span class="label">Writing settings</span>
+            </div>
+            <div class="nav-item">
+                <span class="icon">📊</span>
+                <span class="label">Apps</span>
+                <span class="badge">1</span>
+            </div>
+            <div class="nav-item">
+                <span class="icon">🗑️</span>
+                <span class="label">Trash</span>
+            </div>
+            <div class="divider">GRAMMARLY CLASSIC</div>
+            <div class="nav-item">
+                <span class="icon">📁</span>
+                <span class="label">Classic docs</span>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="editor">
+                <textarea id="writing-input" placeholder="Start writing here..."></textarea>
+            </div>
+            <div class="toolbar">
+                <button class="format-btn">T</button>
+                <button class="format-btn">B</button>
+                <button class="format-btn">I</button>
+                <button class="format-btn">U</button>
+                <button class="format-btn">Color</button>
+                <button class="format-btn">Underline</button>
+                <button class="format-btn">List</button>
+                <button class="format-btn">Link</button>
+                <button class="format-btn">Strikethrough</button>
+                <button class="ask-ai-btn">Ask AI</button>
+            </div>
+        </div>
+        <div class="suggestions-panel">
+            <div class="panel-header">
+                <img src="grammarly-logo.png" alt="Grammarly Logo">
+                <button class="settings-toggle" title="Settings">⚙️</button>
+                <div class="score">
+                    <div class="score-circle">85</div>
+                    <div class="score-label">Writing quality</div>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar"></div>
+                    <div class="progress-label">Proofread</div>
                 </div>
             </div>
-            
-                            <button id="check-btn" class="primary-btn">Check Writing</button>
-            
-            <div class="settings-section">
-                <button id="settings-toggle" class="ghost-btn">⚙️ Settings</button>
-                <div id="settings-panel" class="settings-panel hidden">
-                    <h3>API Configuration</h3>
-                    <div class="form-group">
-                        <label for="endpoint-input">API Endpoint URL</label>
-                        <input type="text" id="endpoint-input" placeholder="https://your-api.com/freellm/check" />
-                        <p class="hint">The FreeLLM API endpoint for checking writing</p>
+            <div class="panel-tabs">
+                <button class="tab-btn active">Proofread</button>
+                <button class="tab-btn">Improve full paragraphs</button>
+            </div>
+            <div class="filters">
+                <button class="filter-btn active">All</button>
+                <button class="filter-btn">Grammar</button>
+                <button class="filter-btn">Clarity</button>
+                <button class="filter-btn">Delivery</button>
+            </div>
+            <div class="suggestions">
+                <div class="suggestion-card">
+                    <div class="error-icon">❌</div>
+                    <div class="suggestion-content">
+                        <h4>Correct subject-verb agreement</h4>
+                        <p class="problem-text">The dogs barks at the mailman.</p>
+                        <p class="fix-text">The dogs bark at the mailman.</p>
                     </div>
-                    <div class="form-group">
-                        <label for="apikey-input">API Key</label>
-                        <input type="password" id="apikey-input" placeholder="Enter your API key" />
-                        <p class="hint">Optional - sent as Bearer token if provided</p>
-                    </div>
-                    <div class="settings-actions">
-                        <button id="save-settings" class="primary-btn">Save Settings</button>
-                        <button id="clear-settings" class="ghost-btn">Clear</button>
+                </div>
+                <div class="suggestion-card">
+                    <div class="error-icon">❌</div>
+                    <div class="suggestion-content">
+                        <h4>Use a comma after an introductory phrase</h4>
+                        <p class="problem-text">After the meeting we discussed the project.</p>
+                        <p class="fix-text">After the meeting, we discussed the project.</p>
                     </div>
                 </div>
             </div>
-            
-            <div class="settings-section">
-                <button id="settings-toggle" class="ghost-btn">⚙️ Settings</button>
-                <div id="settings-panel" class="settings-panel hidden">
-                    <h3>API Configuration</h3>
-                    <div class="form-group">
-                        <label for="endpoint-input">API Endpoint URL</label>
-                        <input type="text" id="endpoint-input" placeholder="https://your-api.com/freellm/check" />
-                        <p class="hint">The FreeLLM API endpoint for checking writing</p>
-                    </div>
-                    <div class="form-group">
-                        <label for="apikey-input">API Key</label>
-                        <input type="password" id="apikey-input" placeholder="Enter your API key" />
-                        <p class="hint">Optional - sent as Bearer token if provided</p>
-                    </div>
-                    <div class="settings-actions">
-                        <button id="save-settings" class="primary-btn">Save Settings</button>
-                        <button id="clear-settings" class="ghost-btn">Clear</button>
-                    </div>
+            <div class="ai-detector">
+                <h4>AI Detector</h4>
+                <p>This text is 98% human-written.</p>
+            </div>
+        </div>
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="settings-panel hidden">
+            <div class="settings-panel-header">
+                <h3>Settings</h3>
+                <button class="close-settings">×</button>
+            </div>
+            <div class="settings-content">
+                <div class="form-group">
+                    <label for="endpoint-input">API Endpoint URL</label>
+                    <input type="text" id="endpoint-input" placeholder="https://your-api.com/freellm/check">
+                    <p class="hint">The FreeLLM API endpoint for checking writing</p>
+                </div>
+                <div class="form-group">
+                    <label for="apikey-input">API Key</label>
+                    <input type="password" id="apikey-input" placeholder="Enter your API key">
+                    <p class="hint">Optional - sent as Bearer token if provided</p>
+                </div>
+                <div class="settings-actions">
+                    <button id="save-settings" class="primary-btn">Save Settings</button>
+                    <button id="clear-settings" class="ghost-btn">Clear</button>
                 </div>
             </div>
-            
-            <div id="results-section" class="hidden">
-                <div id="loading-state" class="loading hidden">
-                    <div class="spinner"></div>
-                    <p>Analyzing your writing...</p>
-                </div>
-                
-                <div id="error-state" class="error hidden">
-                    <p>Unable to check writing. Please try again.</p>
-                </div>
-                
-                <div id="suggestions-content">
-                    <!-- Suggestions will be populated here by JavaScript -->
-                </div>
-                
-                <div class="actions">
-                    <button id="apply-all-btn" class="secondary-btn">Apply All Suggestions</button>
-                    <button id="copy-btn" class="secondary-btn">Copy Corrected Text</button>
-                    <button id="download-btn" class="secondary-btn">Download as .txt</button>
-                </div>
-                
-                <div id="preview-section">
-                    <h3>Preview:</h3>
-                    <div id="preview-text" class="preview-box"></div>
-                </div>
-            </div>
-        </main>
+        </div>
     </div>
-    
     <script src="freellm.js"></script>
     <script src="renderer.js"></script>
 </body>
